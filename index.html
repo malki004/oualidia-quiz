@@ -1,0 +1,2298 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>منصة المسابقات المدرسية التفاعلية - ثانوية الوليدية الإعدادية</title>
+<style>
+  :root {
+    --bg-main: #0f172a;
+    --bg-card: #1e293b;
+    --bg-card-2: #273549;
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --accent: #0ea5e9;
+    --accent-2: #10b981;
+    --accent-warn: #f59e0b;
+    --accent-danger: #ef4444;
+    --border: rgba(255,255,255,0.12);
+    --shadow: 0 12px 30px rgba(0,0,0,0.35);
+  }
+  body.theme-national {
+    --bg-main: #0b2419;
+    --bg-card: #133827;
+    --bg-card-2: #1b4b35;
+    --accent: #16a34a;
+    --accent-2: #eab308;
+  }
+  body.theme-science {
+    --bg-main: #09192f;
+    --bg-card: #102a4c;
+    --bg-card-2: #173b69;
+    --accent: #38bdf8;
+    --accent-2: #2dd4bf;
+  }
+  body.theme-literary {
+    --bg-main: #23190d;
+    --bg-card: #362614;
+    --bg-card-2: #4a341c;
+    --accent: #eab308;
+    --accent-2: #fb923c;
+  }
+  body.theme-night {
+    --bg-main: #090b10;
+    --bg-card: #121622;
+    --bg-card-2: #1a2030;
+    --accent: #818cf8;
+    --accent-2: #34d399;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+    background: var(--bg-main);
+    color: var(--text-main);
+    min-height: 100vh;
+    transition: background 0.3s ease, color 0.3s ease;
+  }
+
+  /* Header */
+  .topbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 18px;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    position: sticky;
+    top: 0;
+    z-index: 40;
+  }
+  .brand-box {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .logo-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .logo-img {
+    width: 46px;
+    height: 46px;
+    border-radius: 10px;
+    object-fit: cover;
+    border: 2px solid var(--accent);
+    background: #fff;
+  }
+  .logo-default {
+    width: 46px;
+    height: 46px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: bold;
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  }
+  .titles h1 {
+    margin: 0;
+    font-size: 1.1rem;
+    line-height: 1.25;
+  }
+  .titles p {
+    margin: 2px 0 0;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    align-items: center;
+  }
+
+  button, .btn {
+    background: var(--bg-card-2);
+    color: var(--text-main);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 0.84rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: transform 0.12s ease, background 0.2s ease, opacity 0.2s ease;
+    font-family: inherit;
+  }
+  button:hover { background: rgba(255,255,255,0.14); transform: translateY(-1px); }
+  button:active { transform: translateY(0); }
+  button.primary { background: var(--accent); color: #fff; border-color: transparent; font-weight: 600; }
+  button.success { background: var(--accent-2); color: #062116; border-color: transparent; font-weight: 700; }
+  button.warn { background: var(--accent-warn); color: #1f1300; border-color: transparent; font-weight: 700; }
+  button.danger { background: var(--accent-danger); color: #fff; border-color: transparent; font-weight: 600; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+  .container {
+    max-width: 1380px;
+    margin: 0 auto;
+    padding: 16px;
+  }
+
+  /* Rounds bar */
+  .rounds-strip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    background: var(--bg-card);
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+  .round-tabs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .round-tab.active { background: var(--accent); color: #fff; font-weight: 700; }
+
+  /* Teams Grid */
+  .teams-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(225px, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .team-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 13px;
+    box-shadow: var(--shadow);
+    position: relative;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+  }
+  .team-card.leader {
+    border-color: #facc15;
+    box-shadow: 0 0 0 1px rgba(250,204,21,0.35), var(--shadow);
+  }
+  .team-card.buzzed {
+    border-color: #ef4444;
+    box-shadow: 0 0 18px rgba(239,68,68,0.5);
+  }
+  .team-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+  .team-name {
+    font-weight: 700;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .rank-badge {
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.1);
+  }
+  .team-score {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--accent-2);
+    margin: 6px 0;
+  }
+  .team-meta {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    min-height: 18px;
+  }
+  .jokers-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 8px;
+  }
+  .joker-btn {
+    padding: 4px 7px;
+    font-size: 0.73rem;
+    border-radius: 6px;
+  }
+  .joker-btn.used {
+    text-decoration: line-through;
+    opacity: 0.35;
+  }
+  .joker-btn.armed {
+    background: #f59e0b;
+    color: #111;
+    font-weight: 700;
+    border-color: #fde047;
+  }
+  .score-controls {
+    display: flex;
+    gap: 6px;
+  }
+  .score-controls button { flex: 1; justify-content: center; padding: 5px; }
+
+  /* Domains & Questions */
+  .domains-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+    gap: 14px;
+  }
+  .domain-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px;
+    box-shadow: var(--shadow);
+  }
+  .domain-title {
+    margin: 0 0 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 1rem;
+  }
+  .q-list { display: flex; flex-direction: column; gap: 8px; }
+  .q-item {
+    background: var(--bg-card-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+  }
+  .q-item.done { opacity: 0.55; }
+  .q-text { font-size: 0.9rem; line-height: 1.35; }
+  .q-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+  .pill {
+    font-size: 0.7rem;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.1);
+    color: var(--text-main);
+  }
+
+  /* Question Stage Modal */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(2, 6, 23, 0.82);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 60;
+    overflow-y: auto;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    width: 100%;
+    max-width: 960px;
+    max-height: 92vh;
+    overflow-y: auto;
+    padding: 22px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.65);
+  }
+  .stage-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .timer-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-card-2);
+    padding: 8px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+  }
+  .timer-num {
+    font-size: 1.6rem;
+    font-weight: 800;
+    min-width: 44px;
+    text-align: center;
+    color: var(--accent-2);
+  }
+  .timer-num.danger { color: var(--accent-danger); }
+  .stage-question {
+    font-size: 1.45rem;
+    font-weight: 700;
+    line-height: 1.45;
+    margin: 12px 0 16px;
+    padding: 16px;
+    background: var(--bg-card-2);
+    border-radius: 14px;
+    border-right: 5px solid var(--accent);
+  }
+  .qcm-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .qcm-opt {
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: var(--bg-card-2);
+    border: 1px solid var(--border);
+    font-size: 1rem;
+  }
+  .qcm-opt.correct {
+    background: rgba(16, 185, 129, 0.25);
+    border-color: #10b981;
+    font-weight: 700;
+  }
+  .answer-reveal {
+    background: rgba(16, 185, 129, 0.14);
+    border: 1px solid rgba(16, 185, 129, 0.45);
+    padding: 12px 14px;
+    border-radius: 10px;
+    margin-bottom: 14px;
+    display: none;
+  }
+  .answer-reveal.show { display: block; }
+
+  .live-responses-box {
+    background: var(--bg-card-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    margin: 14px 0;
+  }
+  .resp-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .resp-chip {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+  }
+  .resp-chip.answered { border-color: var(--accent-2); }
+  .resp-chip.buzzed { border-color: #ef4444; background: rgba(239,68,68,0.18); font-weight: 700; }
+
+  .award-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(185px, 1fr));
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  /* Forms & Tables */
+  input, select, textarea {
+    width: 100%;
+    padding: 9px 11px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-card-2);
+    color: var(--text-main);
+    font-family: inherit;
+    font-size: 0.9rem;
+  }
+  label { display: block; font-size: 0.84rem; color: var(--text-muted); margin-bottom: 4px; margin-top: 10px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: right; font-size: 0.88rem; }
+  th { background: var(--bg-card-2); }
+
+  /* Phone / Simulator & QR */
+  .sim-panel {
+    position: fixed;
+    bottom: 14px;
+    left: 14px;
+    width: 340px;
+    max-width: calc(100vw - 28px);
+    background: #0b1120;
+    border: 2px solid var(--accent);
+    border-radius: 22px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.7);
+    z-index: 75;
+    display: none;
+    overflow: hidden;
+  }
+  .sim-panel.open { display: block; }
+  .sim-head {
+    background: var(--bg-card);
+    padding: 10px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+  .sim-body { padding: 14px; max-height: 430px; overflow-y: auto; }
+  .phone-opt-btn {
+    width: 100%;
+    text-align: right;
+    padding: 11px 13px;
+    margin-bottom: 8px;
+    border-radius: 10px;
+    font-size: 0.95rem;
+  }
+  .buzzer-big-btn {
+    width: 100%;
+    padding: 28px 16px;
+    font-size: 1.35rem;
+    font-weight: 800;
+    border-radius: 18px;
+    background: radial-gradient(circle at top, #f87171, #dc2626);
+    color: #fff;
+    border: 3px solid #fecaca;
+    box-shadow: 0 10px 25px rgba(220,38,38,0.45);
+  }
+
+  /* Certificate */
+  .cert-box {
+    background: #fff;
+    color: #111827;
+    border: 8px double #b45309;
+    border-radius: 14px;
+    padding: 28px;
+    text-align: center;
+  }
+  .cert-box h2 { color: #92400e; margin: 8px 0; font-size: 1.8rem; }
+
+  .toast {
+    position: fixed;
+    bottom: 18px;
+    right: 18px;
+    background: var(--bg-card);
+    color: var(--text-main);
+    border: 1px solid var(--accent);
+    padding: 10px 16px;
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    z-index: 90;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.25s ease;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  @media print {
+    body * { visibility: hidden; }
+    #printArea, #printArea * { visibility: visible; }
+    #printArea { position: fixed; inset: 0; background: #fff; color: #000; padding: 20px; }
+  }
+</style>
+</head>
+<body class="theme-national">
+
+<header class="topbar">
+  <div class="brand-box">
+    <div class="logo-wrap" id="logoContainer">
+      <div class="logo-default" id="defaultLogo">الوليدية</div>
+      <img id="customLogoImg" class="logo-img" style="display:none;" alt="شعار المؤسسة" />
+    </div>
+    <div class="titles">
+      <h1 id="quizTitleDisplay">المسابقة الثقافية والعلمية التفاعلية</h1>
+      <p id="schoolNameDisplay">ثانوية الوليدية الإعدادية — غرفة: <strong id="pinHeaderBadge">----</strong></p>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <button class="primary" onclick="openModal('qrModal')">📱 ربط أجهزة الفرق (QR)</button>
+    <button onclick="toggleSimulator()">📲 محاكي الهاتف</button>
+    <button onclick="openLeaderboard()">🏆 لوحة المتصدرين</button>
+    <button onclick="openStatsModal()">📊 التقرير والإكسل</button>
+    <button onclick="openQuestionEditor()">➕ إضافة سؤال</button>
+    <button onclick="openImportExportModal()">📥 استيراد / تصدير</button>
+    <button onclick="openSettingsModal()">⚙️ الإعدادات والشعار</button>
+    <button onclick="toggleFullscreen()">⛶ ملء الشاشة</button>
+    <button class="warn" onclick="openPodiumModal()">🏅 التتويج والشهادة</button>
+  </div>
+</header>
+
+<div class="container">
+  <div class="rounds-strip">
+    <div class="round-tabs" id="roundTabs"></div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+      <button onclick="addRound()">+ جولة جديدة</button>
+      <button onclick="advanceTopTeams()">⬆️ تصعيد المتصدرين</button>
+      <button class="danger" onclick="resetCurrentRoundScores()">↺ تصفير نقاط الجولة</button>
+    </div>
+  </div>
+
+  <div class="teams-grid" id="teamsGrid"></div>
+  <div class="domains-grid" id="domainsGrid"></div>
+</div>
+
+<!-- Question Stage Modal -->
+<div class="modal-backdrop" id="stageModal">
+  <div class="modal">
+    <div class="stage-top">
+      <div>
+        <span class="pill" id="stageDomainPill">محور</span>
+        <span class="pill" id="stageTypePill">نمط</span>
+        <span class="pill" id="stagePointsPill">نقاط</span>
+      </div>
+      <div class="timer-box">
+        <span>⏱️</span>
+        <div class="timer-num" id="timerDisplay">30</div>
+        <button onclick="toggleTimer()" id="timerToggleBtn">إيقاف</button>
+        <button onclick="adjustTimer(10)">+10ث</button>
+        <button onclick="resetTimer()">إعادة</button>
+      </div>
+      <button class="danger" onclick="closeStageModal()">✕ إغلاق</button>
+    </div>
+
+    <div class="stage-question" id="stageQuestionText"></div>
+    <div id="stageImageWrap" style="text-align:center; margin-bottom:12px; display:none;">
+      <img id="stageQuestionImg" style="max-height:220px; border-radius:10px; border:1px solid var(--border);" alt="صورة السؤال" />
+    </div>
+
+    <div class="qcm-grid" id="stageQcmGrid"></div>
+
+    <div class="answer-reveal" id="stageAnswerReveal">
+      <strong>الإجابة النموذجية:</strong> <span id="stageAnswerText"></span>
+    </div>
+
+    <div class="live-responses-box">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <strong>📡 التفاعل اللحظي لأجهزة الفرق:</strong>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="success" id="autoGradeBtn" onclick="autoGradeQcm()" style="display:none;">⚡ اعتماد التصحيح الآلي لـ QCM</button>
+          <button onclick="reopenBuzzer()">🔔 إعادة فتح الجرس</button>
+          <button onclick="revealAnswer()">👁️ إظهار الإجابة</button>
+        </div>
+      </div>
+      <div class="resp-chips" id="liveResponsesChips"></div>
+    </div>
+
+    <div>
+      <strong>منح النقاط للفرق (يمكن المنح لفريق أو لعدة فرق):</strong>
+      <div class="award-grid" id="awardTeamsGrid"></div>
+    </div>
+
+    <div style="margin-top:16px; display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+      <button onclick="markQuestionDone()">✓ اعتبار السؤال منجزاً والعودة</button>
+      <button class="primary" onclick="closeStageModal()">حفظ وإغلاق النافذة</button>
+    </div>
+  </div>
+</div>
+
+<!-- QR & Connection Modal -->
+<div class="modal-backdrop" id="qrModal">
+  <div class="modal" style="max-width:680px;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2 style="margin:0;">📱 ربط هواتف وألواح الفرق (QR + PIN)</h2>
+      <button onclick="closeModal('qrModal')">✕</button>
+    </div>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:16px; margin-top:14px; align-items:center;">
+      <div style="text-align:center; background:var(--bg-card-2); padding:16px; border-radius:14px;">
+        <canvas id="qrCanvas" width="220" height="220" style="background:#fff; border-radius:10px; padding:8px; max-width:100%;"></canvas>
+        <div style="margin-top:8px; font-size:1.1rem;">رمز الغرفة (PIN): <strong id="roomPinText" style="color:var(--accent-2); letter-spacing:3px;"></strong></div>
+        <div style="font-size:0.78rem; color:var(--text-muted); margin-top:4px; word-break:break-all; direction:ltr;" id="joinUrlText"></div>
+        <div style="margin-top:8px; display:flex; gap:6px; justify-content:center; flex-wrap:wrap;">
+          <button onclick="downloadQrImage()" style="font-size:0.78rem;">⬇️ حفظ صورة QR</button>
+          <button onclick="copyJoinLink()" style="font-size:0.78rem;">📋 نسخ الرابط</button>
+        </div>
+      </div>
+
+      <div>
+        <label>رابط الاستضافة أو الشبكة المحلية (لتضمينه في QR):</label>
+        <input type="text" id="customBaseUrlInput" dir="ltr" placeholder="https://example.com/quiz.html" oninput="updateCustomBaseUrl(this.value)" />
+        <small style="color:var(--text-muted); display:block; margin-top:3px;">عند فتح الملف محلياً (file://)، يُولّد QR رمز الغرفة تلقائياً أو الرابط الذي تكتبه أعلاه.</small>
+
+        <label>وضع المزامنة والاتصال:</label>
+        <select id="syncModeSelect" onchange="changeSyncMode(this.value)">
+          <option value="local_bridge">شبكة محلية / نفس المتصفح والمحاكي (بدون إنترنت)</option>
+          <option value="firebase">مزامنة سحابية فورية (Firebase Realtime)</option>
+        </select>
+
+        <div id="firebaseConfigBox" style="display:none; margin-top:8px;">
+          <label>رابط قاعدة بيانات Firebase (Database URL):</label>
+          <input type="text" id="firebaseUrlInput" placeholder="https://your-project-default-rtdb.firebaseio.com" onchange="saveFirebaseConfig()" />
+          <small style="color:var(--text-muted);">يتيح ربط هواتف متعددة عبر الإنترنت أو 4G في اللحظة نفسها.</small>
+        </div>
+
+        <div style="margin-top:14px; display:flex; flex-direction:column; gap:8px;">
+          <button class="primary" onclick="toggleSimulator(); closeModal('qrModal');">📲 فتح / إغلاق محاكي هاتف الفريق للتجربة</button>
+          <button onclick="regeneratePin()">🔄 توليد رمز غرفة (PIN) جديد</button>
+        </div>
+      </div>
+    </div>
+
+    <h3 style="margin-top:18px; margin-bottom:6px;">الأجهزة والفرق المرتبطة (إعادة الاتصال التلقائي مفعّل):</h3>
+    <div id="connectedDevicesList" class="resp-chips"></div>
+  </div>
+</div>
+
+<!-- Question Editor Modal -->
+<div class="modal-backdrop" id="questionModal">
+  <div class="modal" style="max-width:640px;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2 style="margin:0;" id="qModalTitle">إضافة سؤال جديد</h2>
+      <button onclick="closeModal('questionModal')">✕</button>
+    </div>
+    <input type="hidden" id="editQId" />
+    <label>المحور:</label>
+    <select id="qDomainSelect"></select>
+
+    <label>نمط السؤال:</label>
+    <select id="qTypeSelect" onchange="toggleQcmFields()">
+      <option value="qcm">اختيار من متعدد (QCM - تصحيح آلي)</option>
+      <option value="open">إجابة مكتوبة قصيرة (مفتوح)</option>
+      <option value="buzzer">جرس السرعة (Buzzer - شفوي سريع)</option>
+    </select>
+
+    <label>نص السؤال:</label>
+    <textarea id="qTextInput" rows="3" placeholder="اكتب نص السؤال بوضوح..."></textarea>
+
+    <div id="qcmFieldsWrap">
+      <label>الخيارات الأربعة (افصل بينها أو اكتب كل خيار في حقل):</label>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+        <input type="text" id="opt0" placeholder="الخيار الأول (أ)" />
+        <input type="text" id="opt1" placeholder="الخيار الثاني (ب)" />
+        <input type="text" id="opt2" placeholder="الخيار الثالث (ج)" />
+        <input type="text" id="opt3" placeholder="الخيار الرابع (د)" />
+      </div>
+      <label>الإجابة الصحيحة (يجب أن تطابق أحد الخيارات أعلاه):</label>
+      <input type="text" id="qCorrectOptInput" placeholder="مثال: 1975" />
+    </div>
+
+    <div id="openAnswerWrap" style="display:none;">
+      <label>الإجابة النموذجية / المرجعية:</label>
+      <input type="text" id="qAnswerInput" placeholder="الإجابة الصحيحة للعرض عند الكشف..." />
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+      <div>
+        <label>قيمة النقاط:</label>
+        <select id="qPointsSelect">
+          <option value="1">1 نقطة</option>
+          <option value="2" selected>2 نقطتان</option>
+          <option value="3">3 نقاط</option>
+        </select>
+      </div>
+      <div>
+        <label>المدة الزمنية (ثانية):</label>
+        <input type="number" id="qTimeInput" value="30" min="5" max="300" />
+      </div>
+    </div>
+
+    <label>صورة مرفقة بالسؤال (اختياري):</label>
+    <input type="file" accept="image/*" onchange="handleQuestionImageUpload(this)" />
+    <input type="hidden" id="qImageData" />
+
+    <div style="margin-top:16px; display:flex; gap:10px; justify-content:flex-end;">
+      <button onclick="closeModal('questionModal')">إلغاء</button>
+      <button class="primary" onclick="saveQuestion()">💾 حفظ السؤال</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings & Logo Modal -->
+<div class="modal-backdrop" id="settingsModal">
+  <div class="modal" style="max-width:660px;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2 style="margin:0;">⚙️ إعدادات المسابقة، الشعار، والمحاور</h2>
+      <button onclick="closeModal('settingsModal')">✕</button>
+    </div>
+
+    <label>عنوان المسابقة:</label>
+    <input type="text" id="setQuizTitle" />
+
+    <label>اسم المؤسسة التعليمية:</label>
+    <input type="text" id="setSchoolName" />
+
+    <label>السمة اللونية (الثيم):</label>
+    <select id="setTheme">
+      <option value="theme-national">ثيم وطني أخضر وذهبي</option>
+      <option value="theme-science">ثيم علمي أزرق</option>
+      <option value="theme-literary">ثيم أدبي ذهبي دافئ</option>
+      <option value="theme-night">وضع ليلي مريح للداتاشو</option>
+      <option value="">ثيم قياسي حديث</option>
+    </select>
+
+    <label>إدارة الشعار في الشريط العلوي:</label>
+    <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+      <input type="file" id="logoFileInput" accept="image/*" style="max-width:260px;" onchange="handleLogoUpload(this)" />
+      <button onclick="resetLogo()">استعادة الافتراضي</button>
+      <button onclick="toggleLogoVisibility()">إظهار / إخفاء الشعار</button>
+    </div>
+
+    <label>أسماء المحاور (مفصولة بفاصلة):</label>
+    <input type="text" id="setDomains" placeholder="الثقافة والذاكرة الوطنية, العلوم والبيئة البحرية, اللغة والأدب والرياضيات" />
+
+    <label>أسماء الفرق (مفصولة بفاصلة):</label>
+    <input type="text" id="setTeams" placeholder="فريق المسيرة, فريق الأمل, فريق التحدي, فريق النجاح" />
+
+    <div style="margin-top:16px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+      <button class="danger" onclick="fullResetAll()">🗑️ إعادة ضبط شاملة للنظام</button>
+      <button class="primary" onclick="saveSettings()">💾 حفظ الإعدادات</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import / Export Modal -->
+<div class="modal-backdrop" id="ioModal">
+  <div class="modal" style="max-width:720px;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2 style="margin:0;">📥 استيراد وتصدير الأسئلة والبيانات (Excel / CSV / JSON)</h2>
+      <button onclick="closeModal('ioModal')">✕</button>
+    </div>
+
+    <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;">
+      <button class="success" onclick="exportQuestionsExcel()">📊 تصدير الأسئلة إلى Excel (.xls)</button>
+      <button onclick="downloadExcelTemplate()">📄 تحميل نموذج إكسل فارغ</button>
+      <button onclick="exportStateJson()">💾 تصدير نسخة JSON كاملة</button>
+      <label class="btn" style="margin:0; cursor:pointer;">
+        📂 استيراد ملف (.xls / .csv / .json)
+        <input type="file" accept=".xls,.xlsx,.csv,.json,.txt" style="display:none;" onchange="handleImportFile(this)" />
+      </label>
+    </div>
+
+    <label>أو الصق صفوفاً مباشرة من Excel / CSV (الصيغة: المحور | النوع qcm/open/buzzer | السؤال | الإجابة | النقاط | خيار1 | خيار2 | خيار3 | خيار4):</label>
+    <textarea id="bulkPasteArea" rows="6" placeholder="الثقافة والذاكرة الوطنية	qcm	في أي سنة انطلقت المسيرة الخضراء؟	1975	2	1973	1975	1979	1956"></textarea>
+
+    <div style="margin-top:10px; display:flex; gap:8px; justify-content:flex-end;">
+      <button onclick="importPastedRows(false)">➕ إضافة للأسئلة الحالية</button>
+      <button class="primary" onclick="importPastedRows(true)">🔄 استبدال الأسئلة الحالية</button>
+    </div>
+  </div>
+</div>
+
+<!-- Stats & Excel Report Modal -->
+<div class="modal-backdrop" id="statsModal">
+  <div class="modal" style="max-width:780px;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2 style="margin:0;">📊 التقرير الإحصائي وتصدير النتائج إلى إكسل</h2>
+      <button onclick="closeModal('statsModal')">✕</button>
+    </div>
+    <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="success" onclick="exportResultsExcel()">📊 تصدير النتائج إلى Excel (.xls)</button>
+      <button onclick="printSection('statsTableWrap')">🖨️ طباعة التقرير</button>
+    </div>
+    <div id="statsTableWrap" style="margin-top:12px;"></div>
+  </div>
+</div>
+
+<!-- Leaderboard Modal -->
+<div class="modal-backdrop" id="leaderboardModal">
+  <div class="modal" style="max-width:680px;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2 style="margin:0;">🏆 لوحة المتصدرين التفاعلية</h2>
+      <button onclick="closeModal('leaderboardModal')">✕</button>
+    </div>
+    <div id="leaderboardBody" style="margin-top:14px;"></div>
+  </div>
+</div>
+
+<!-- Podium & Certificate Modal -->
+<div class="modal-backdrop" id="podiumModal">
+  <div class="modal" style="max-width:760px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <h2 style="margin:0;">🏅 منصة التتويج والشهادة التقديرية</h2>
+      <div style="display:flex; gap:8px;">
+        <button class="primary" onclick="printSection('printArea')">🖨️ طباعة الشهادة</button>
+        <button onclick="closeModal('podiumModal')">✕</button>
+      </div>
+    </div>
+
+    <label>أسماء التلاميذ أعضاء الفريق الفائز (قابلة للتعديل قبل الطباعة):</label>
+    <input type="text" id="certMembersInput" placeholder="اكتب أسماء أعضاء الفريق المتوج..." oninput="renderCertificate()" />
+
+    <div id="printArea" style="margin-top:16px;">
+      <div class="cert-box" id="certificateCard"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Phone Simulator -->
+<div class="sim-panel" id="simPanel">
+  <div class="sim-head">
+    <span>📲 محاكي هاتف الفريق (تجربة مباشرة)</span>
+    <button style="padding:3px 8px;" onclick="toggleSimulator()">✕</button>
+  </div>
+  <div class="sim-body" id="simBody"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const STORAGE_KEY = "oualidia_live_quiz_v1";
+
+const DEFAULT_QUESTIONS = [
+  { id: "q1", domain: "الثقافة والذاكرة الوطنية", type: "qcm", text: "في أي سنة انطلقت المسيرة الخضراء المظفرة؟", options: ["1973", "1975", "1979", "1956"], answer: "1975", points: 2, time: 25, done: false },
+  { id: "q2", domain: "الثقافة والذاكرة الوطنية", type: "buzzer", text: "ما المدينة المغربية الساحلية التي تشتهر ببحيرتها الطبيعية وشواطئها الخلابة وتقع بين الجديدة وآسفي؟", options: [], answer: "الوليدية", points: 2, time: 20, done: false },
+  { id: "q3", domain: "الثقافة والذاكرة الوطنية", type: "open", text: "اذكر اسم النشيد الوطني المغربي.", options: [], answer: "تحية العلم", points: 1, time: 25, done: false },
+
+  { id: "q4", domain: "العلوم والبيئة البحرية", type: "qcm", text: "ما الغاز الذي تطرحه النباتات الخضراء أثناء عملية التركيب الضوئي؟", options: ["ثنائي الأكسجين", "ثنائي أكسيد الكربون", "الآزوت", "الهيدروجين"], answer: "ثنائي الأكسجين", points: 2, time: 25, done: false },
+  { id: "q5", domain: "العلوم والبيئة البحرية", type: "buzzer", text: "ما الظاهرة الطبيعية التي تسبب ارتفاع وانخفاض مستوى مياه البحر بشكل دوري بفعل جاذبية القمر والشمس؟", options: [], answer: "المد والجزر", points: 3, time: 25, done: false },
+  { id: "q6", domain: "العلوم والبيئة البحرية", type: "open", text: "ما اسم الكوكب الأقرب إلى الشمس في المجموعة الشمسية؟", options: [], answer: "عطارد", points: 2, time: 20, done: false },
+
+  { id: "q7", domain: "اللغة والأدب والرياضيات الذهنية", type: "qcm", text: "ما إعراب كلمة «التلاميذُ» في جملة: «اجتهدَ التلاميذُ في المسابقة»؟", options: ["مفعول به منصوب", "فاعل مرفوع وعلامة رفعه الضمة", "اسم مجرور", "مبتدأ مرفوع"], answer: "فاعل مرفوع وعلامة رفعه الضمة", points: 2, time: 30, done: false },
+  { id: "q8", domain: "اللغة والأدب والرياضيات الذهنية", type: "buzzer", text: "ما ناتج ضرب 12 × 8 ؟", options: [], answer: "96", points: 1, time: 20, done: false },
+  { id: "q9", domain: "اللغة والأدب والرياضيات الذهنية", type: "open", text: "اكتب ضد كلمة «التواضع» في كلمة واحدة.", options: [], answer: "التكبر", points: 3, time: 25, done: false }
+];
+
+function createDefaultState() {
+  const teamNames = ["فريق المسيرة", "فريق الأمل", "فريق التحدي", "فريق النجاح"];
+  return {
+    pin: String(Math.floor(10000 + Math.random() * 90000)),
+    title: "المسابقة الثقافية والعلمية التفاعلية",
+    school: "ثانوية الوليدية الإعدادية",
+    theme: "theme-national",
+    logoData: "",
+    logoVisible: true,
+    syncMode: "local_bridge",
+    firebaseUrl: "",
+    currentRound: 0,
+    rounds: ["الجولة التمهيدية", "نصف النهائي", "النهائي"],
+    qualifiedTeams: [],
+    domains: ["الثقافة والذاكرة الوطنية", "العلوم والبيئة البحرية", "اللغة والأدب والرياضيات الذهنية"],
+    questions: JSON.parse(JSON.stringify(DEFAULT_QUESTIONS)),
+    teams: teamNames.map((name, idx) => ({
+      id: "t_" + (idx + 1),
+      name,
+      score: 0,
+      roundScores: [0, 0, 0],
+      domainHits: {},
+      jokers: { double: false, fifty: false, audience: false },
+      armedDouble: false,
+      connected: true,
+      lastFeedback: ""
+    })),
+    activeQuestionId: null,
+    questionOpen: false,
+    questionStartTime: null,
+    buzzerLockedBy: null,
+    responses: {},
+    certMembers: "تلاميذ وتلميذات ثانوية الوليدية الإعدادية"
+  };
+}
+
+let state = loadState();
+let timerInterval = null;
+let timeLeft = 30;
+let timerRunning = false;
+let simTeamId = null;
+const channel = ("BroadcastChannel" in window) ? new BroadcastChannel("oualidia_quiz_channel") : null;
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return { ...createDefaultState(), ...parsed };
+    }
+  } catch (e) {}
+  return createDefaultState();
+}
+
+function saveState(broadcast = true) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {}
+  if (broadcast) {
+    if (channel) channel.postMessage({ type: "STATE_UPDATE", state });
+    if (state.syncMode === "firebase" && state.firebaseUrl) {
+      syncToFirebase();
+    }
+  }
+  renderSim();
+}
+
+async function syncToFirebase() {
+  if (!state.firebaseUrl) return;
+  const base = state.firebaseUrl.replace(/\/+$/, "");
+  try {
+    await fetch(`${base}/quiz_rooms/${state.pin}.json`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(state)
+    });
+  } catch (e) {}
+}
+
+function showToast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => el.classList.remove("show"), 2600);
+}
+
+function playTone(freq = 660, duration = 0.18, type = "sine") {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + duration);
+  } catch (e) {}
+}
+
+function renderAll() {
+  document.body.className = state.theme || "";
+  document.getElementById("quizTitleDisplay").textContent = state.title;
+  document.getElementById("schoolNameDisplay").innerHTML = `${state.school} — غرفة: <strong id="pinHeaderBadge">${state.pin}</strong>`;
+
+  const imgEl = document.getElementById("customLogoImg");
+  const defEl = document.getElementById("defaultLogo");
+  const logoWrap = document.getElementById("logoContainer");
+  logoWrap.style.display = state.logoVisible ? "flex" : "none";
+  if (state.logoData) {
+    imgEl.src = state.logoData;
+    imgEl.style.display = "block";
+    defEl.style.display = "none";
+  } else {
+    imgEl.style.display = "none";
+    defEl.style.display = "flex";
+  }
+
+  renderRounds();
+  renderTeams();
+  renderDomains();
+  renderQrModal();
+  if (document.getElementById("stageModal").classList.contains("open")) {
+    renderStageLive();
+  }
+}
+
+function renderRounds() {
+  const wrap = document.getElementById("roundTabs");
+  wrap.innerHTML = "";
+  state.rounds.forEach((r, idx) => {
+    const btn = document.createElement("button");
+    btn.className = "round-tab" + (idx === state.currentRound ? " active" : "");
+    btn.textContent = r;
+    btn.onclick = () => {
+      state.currentRound = idx;
+      saveState();
+      renderAll();
+    };
+    wrap.appendChild(btn);
+  });
+}
+
+function renderTeams() {
+  const grid = document.getElementById("teamsGrid");
+  grid.innerHTML = "";
+  const sorted = [...state.teams].sort((a, b) => b.score - a.score);
+  const topScore = sorted[0] ? sorted[0].score : 0;
+
+  state.teams.forEach((team) => {
+    const rank = sorted.findIndex(t => t.id === team.id) + 1;
+    const isLeader = team.score === topScore && topScore > 0;
+    const isBuzzed = state.buzzerLockedBy === team.id;
+
+    const card = document.createElement("div");
+    card.className = "team-card" + (isLeader ? " leader" : "") + (isBuzzed ? " buzzed" : "");
+    card.innerHTML = `
+      <div class="team-header">
+        <div class="team-name">${isBuzzed ? "🔔 " : ""}${escapeHtml(team.name)}</div>
+        <span class="rank-badge">#${rank} ${team.connected ? "🟢" : "⚪"}</span>
+      </div>
+      <div class="team-score">${team.score} <span style="font-size:0.85rem; font-weight:500;">نقطة</span></div>
+      <div class="team-meta">${escapeHtml(team.lastFeedback || (state.qualifiedTeams.includes(team.id) ? "⭐ متأهل للجولة التالية" : "جاهز للمنافسة"))}</div>
+      <div class="jokers-row">
+        <button class="joker-btn ${team.jokers.double ? "used" : ""} ${team.armedDouble ? "armed" : ""}" onclick="toggleDoubleJoker('${team.id}')" title="مضاعفة نقاط السؤال الحالي ×2">⚡ ×2</button>
+        <button class="joker-btn ${team.jokers.fifty ? "used" : ""}" onclick="useFiftyJoker('${team.id}')" title="حذف إجابتين في QCM">✂️ 50/50</button>
+        <button class="joker-btn ${team.jokers.audience ? "used" : ""}" onclick="useAudienceJoker('${team.id}')" title="إضافة 15 ثانية للجمهور">👥 +15ث</button>
+      </div>
+      <div class="score-controls">
+        <button class="success" onclick="adjustScore('${team.id}', 1)">+1</button>
+        <button class="success" onclick="adjustScore('${team.id}', 2)">+2</button>
+        <button class="danger" onclick="adjustScore('${team.id}', -1)">-1</button>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+function renderDomains() {
+  const grid = document.getElementById("domainsGrid");
+  grid.innerHTML = "";
+
+  state.domains.forEach((dom) => {
+    const qs = state.questions.filter(q => q.domain === dom);
+    const card = document.createElement("div");
+    card.className = "domain-card";
+    const typeLabel = (t) => t === "qcm" ? "QCM" : t === "buzzer" ? "🔔 جرس" : "✍️ مكتوب";
+
+    card.innerHTML = `
+      <div class="domain-title">
+        <span>${escapeHtml(dom)}</span>
+        <span class="pill">${qs.length} أسئلة</span>
+      </div>
+      <div class="q-list">
+        ${qs.map((q, i) => `
+          <div class="q-item ${q.done ? "done" : ""}">
+            <div style="flex:1;">
+              <div class="q-text"><strong>${i + 1}.</strong> ${escapeHtml(q.text)}</div>
+              <div class="q-badges">
+                <span class="pill">${typeLabel(q.type)}</span>
+                <span class="pill">${q.points} ن</span>
+                <span class="pill">${q.time}ث</span>
+                ${q.done ? '<span class="pill" style="background:rgba(16,185,129,0.25);">منجز ✓</span>' : ""}
+              </div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:5px;">
+              <button class="primary" onclick="openQuestionStage('${q.id}')">عرض</button>
+              <button onclick="openQuestionEditor('${q.id}')" style="padding:4px 8px; font-size:0.75rem;">تعديل</button>
+            </div>
+          </div>
+        `).join("") || '<div style="color:var(--text-muted); font-size:0.85rem;">لا توجد أسئلة في هذا المحور بعد.</div>'}
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+function adjustScore(teamId, delta, domainName = null) {
+  const team = state.teams.find(t => t.id === teamId);
+  if (!team) return;
+  let actualDelta = delta;
+  if (delta > 0 && team.armedDouble) {
+    actualDelta = delta * 2;
+    team.armedDouble = false;
+    team.jokers.double = true;
+  }
+  team.score = Math.max(0, team.score + actualDelta);
+  if (actualDelta > 0 && domainName) {
+    team.domainHits[domainName] = (team.domainHits[domainName] || 0) + 1;
+  }
+  team.lastFeedback = actualDelta > 0 ? `أحسنت! +${actualDelta} نقطة` : `تعديل: ${actualDelta} نقطة`;
+  if (actualDelta > 0) playTone(880, 0.16, "triangle");
+  saveState();
+  renderAll();
+}
+
+function toggleDoubleJoker(teamId) {
+  const team = state.teams.find(t => t.id === teamId);
+  if (!team || team.jokers.double) return;
+  team.armedDouble = !team.armedDouble;
+  showToast(team.armedDouble ? `تم تفعيل ×2 لـ ${team.name} للسؤال القادم` : `تم إلغاء ×2 لـ ${team.name}`);
+  saveState();
+  renderTeams();
+}
+
+function useFiftyJoker(teamId) {
+  const team = state.teams.find(t => t.id === teamId);
+  if (!team || team.jokers.fifty) return;
+  team.jokers.fifty = true;
+  showToast(`${team.name} استخدم بطاقة حذف إجابتين (50/50)`);
+  saveState();
+  renderTeams();
+}
+
+function useAudienceJoker(teamId) {
+  const team = state.teams.find(t => t.id === teamId);
+  if (!team || team.jokers.audience) return;
+  team.jokers.audience = true;
+  timeLeft += 15;
+  document.getElementById("timerDisplay").textContent = timeLeft;
+  showToast(`${team.name} طلب مساعدة الجمهور (+15 ثانية)`);
+  saveState();
+  renderTeams();
+}
+
+/* Question Stage */
+function openQuestionStage(qId) {
+  const q = state.questions.find(item => item.id === qId);
+  if (!q) return;
+
+  state.activeQuestionId = q.id;
+  state.questionOpen = true;
+  state.questionStartTime = Date.now();
+  state.buzzerLockedBy = null;
+  state.responses = {};
+
+  state.teams.forEach(t => {
+    const shuffled = q.type === "qcm" ? shuffleArray([...q.options]) : [];
+    state.responses[t.id] = {
+      answer: "",
+      shuffledOptions: shuffled,
+      timeSec: null,
+      graded: false
+    };
+  });
+
+  document.getElementById("stageDomainPill").textContent = q.domain;
+  document.getElementById("stageTypePill").textContent = q.type === "qcm" ? "اختيار من متعدد QCM" : q.type === "buzzer" ? "🔔 جرس السرعة" : "✍️ إجابة مكتوبة";
+  document.getElementById("stagePointsPill").textContent = `${q.points} نقاط`;
+  document.getElementById("stageQuestionText").textContent = q.text;
+  document.getElementById("stageAnswerText").textContent = q.answer || "—";
+  document.getElementById("stageAnswerReveal").classList.remove("show");
+  document.getElementById("autoGradeBtn").style.display = q.type === "qcm" ? "inline-flex" : "none";
+
+  const imgWrap = document.getElementById("stageImageWrap");
+  if (q.image) {
+    document.getElementById("stageQuestionImg").src = q.image;
+    imgWrap.style.display = "block";
+  } else {
+    imgWrap.style.display = "none";
+  }
+
+  const qcmGrid = document.getElementById("stageQcmGrid");
+  qcmGrid.innerHTML = "";
+  if (q.type === "qcm") {
+    q.options.forEach((opt, idx) => {
+      const div = document.createElement("div");
+      div.className = "qcm-opt";
+      div.dataset.opt = opt;
+      div.textContent = `${["أ", "ب", "ج", "د"][idx] || idx + 1}) ${opt}`;
+      qcmGrid.appendChild(div);
+    });
+  }
+
+  const awardGrid = document.getElementById("awardTeamsGrid");
+  awardGrid.innerHTML = "";
+  state.teams.forEach(t => {
+    const btn = document.createElement("button");
+    btn.className = "success";
+    btn.textContent = `منح ${q.points} ن لـ ${t.name}`;
+    btn.onclick = () => {
+      adjustScore(t.id, q.points, q.domain);
+      renderStageLive();
+    };
+    awardGrid.appendChild(btn);
+  });
+
+  timeLeft = q.time || 30;
+  startTimer();
+  saveState();
+  renderStageLive();
+  document.getElementById("stageModal").classList.add("open");
+}
+
+function renderStageLive() {
+  const q = state.questions.find(item => item.id === state.activeQuestionId);
+  if (!q) return;
+
+  const chipsWrap = document.getElementById("liveResponsesChips");
+  chipsWrap.innerHTML = "";
+
+  state.teams.forEach(t => {
+    const r = state.responses[t.id] || {};
+    const isBuzzed = state.buzzerLockedBy === t.id;
+    const chip = document.createElement("div");
+    chip.className = "resp-chip" + (r.answer ? " answered" : "") + (isBuzzed ? " buzzed" : "");
+    let detail = "⏳ يفكر...";
+    if (q.type === "buzzer") {
+      detail = isBuzzed ? `🔔 ضغط أولاً (${r.timeSec || "?"}ث)` : (state.buzzerLockedBy ? "🔒 مقفل" : "⏳ جاهز للجرس");
+    } else if (r.answer) {
+      detail = q.type === "qcm"
+        ? `✅ أجاب (${r.timeSec}ث)${document.getElementById("stageAnswerReveal").classList.contains("show") ? " : " + r.answer : ""}`
+        : `💬 "${r.answer}" (${r.timeSec}ث)`;
+    }
+    chip.innerHTML = `<strong>${escapeHtml(t.name)}</strong><br><span style="font-size:0.78rem; color:var(--text-muted);">${escapeHtml(detail)}</span>`;
+    chipsWrap.appendChild(chip);
+  });
+}
+
+function autoGradeQcm() {
+  const q = state.questions.find(item => item.id === state.activeQuestionId);
+  if (!q || q.type !== "qcm") return;
+  revealAnswer();
+
+  let fastestTeamId = null;
+  let fastestTime = Infinity;
+
+  state.teams.forEach(t => {
+    const r = state.responses[t.id];
+    if (r && !r.graded && r.answer && r.answer.trim() === (q.answer || "").trim()) {
+      if (typeof r.timeSec === "number" && r.timeSec < fastestTime) {
+        fastestTime = r.timeSec;
+        fastestTeamId = t.id;
+      }
+    }
+  });
+
+  state.teams.forEach(t => {
+    const r = state.responses[t.id];
+    if (!r || r.graded) return;
+    r.graded = true;
+    const isCorrect = r.answer && r.answer.trim() === (q.answer || "").trim();
+    if (isCorrect) {
+      const bonus = (t.id === fastestTeamId) ? 1 : 0;
+      adjustScore(t.id, q.points + bonus, q.domain);
+      t.lastFeedback = `إجابة صحيحة! +${q.points + bonus} ن` + (bonus ? " (سرعة +1)" : "");
+    } else {
+      t.lastFeedback = "إجابة غير مطابقة";
+    }
+  });
+
+  saveState();
+  renderAll();
+  renderStageLive();
+  showToast("تم اعتماد التصحيح الآلي لأسئلة QCM");
+}
+
+function reopenBuzzer() {
+  state.buzzerLockedBy = null;
+  saveState();
+  renderAll();
+  renderStageLive();
+  showToast("تمت إعادة فتح الجرس لجميع الفرق");
+}
+
+function revealAnswer() {
+  const q = state.questions.find(item => item.id === state.activeQuestionId);
+  document.getElementById("stageAnswerReveal").classList.add("show");
+  if (q && q.type === "qcm") {
+    document.querySelectorAll(".qcm-opt").forEach(el => {
+      if ((el.dataset.opt || "").trim() === (q.answer || "").trim()) {
+        el.classList.add("correct");
+      }
+    });
+  }
+}
+
+function markQuestionDone() {
+  const q = state.questions.find(item => item.id === state.activeQuestionId);
+  if (q) q.done = true;
+  closeStageModal();
+}
+
+function closeStageModal() {
+  stopTimer();
+  state.questionOpen = false;
+  state.activeQuestionId = null;
+  document.getElementById("stageModal").classList.remove("open");
+  saveState();
+  renderAll();
+}
+
+/* Timer */
+function startTimer() {
+  stopTimer();
+  timerRunning = true;
+  document.getElementById("timerToggleBtn").textContent = "إيقاف";
+  updateTimerDisplay();
+  timerInterval = setInterval(() => {
+    if (!timerRunning) return;
+    timeLeft--;
+    updateTimerDisplay();
+    if (timeLeft > 0 && timeLeft <= 5) playTone(520, 0.08, "sine");
+    if (timeLeft <= 0) {
+      timeLeft = 0;
+      updateTimerDisplay();
+      stopTimer();
+      state.questionOpen = false;
+      playTone(330, 0.45, "sawtooth");
+      saveState();
+      renderSim();
+    }
+  }, 1000);
+}
+
+function stopTimer() {
+  timerRunning = false;
+  clearInterval(timerInterval);
+  const btn = document.getElementById("timerToggleBtn");
+  if (btn) btn.textContent = "استئناف";
+}
+
+function toggleTimer() {
+  if (timerRunning) stopTimer();
+  else {
+    if (timeLeft > 0) {
+      state.questionOpen = true;
+      startTimer();
+      saveState();
+    }
+  }
+}
+
+function adjustTimer(sec) {
+  timeLeft = Math.max(0, timeLeft + sec);
+  updateTimerDisplay();
+}
+
+function resetTimer() {
+  const q = state.questions.find(item => item.id === state.activeQuestionId);
+  timeLeft = q ? (q.time || 30) : 30;
+  state.questionOpen = true;
+  startTimer();
+  saveState();
+}
+
+function updateTimerDisplay() {
+  const el = document.getElementById("timerDisplay");
+  if (!el) return;
+  el.textContent = timeLeft;
+  el.classList.toggle("danger", timeLeft <= 5);
+}
+
+/* Phone Simulator */
+function toggleSimulator() {
+  const panel = document.getElementById("simPanel");
+  panel.classList.toggle("open");
+  if (!simTeamId && state.teams[0]) simTeamId = state.teams[0].id;
+  renderSim();
+}
+
+function renderSim() {
+  const body = document.getElementById("simBody");
+  if (!body || !document.getElementById("simPanel").classList.contains("open")) return;
+
+  const team = state.teams.find(t => t.id === simTeamId) || state.teams[0];
+  if (!team) return;
+  simTeamId = team.id;
+
+  const q = state.questions.find(item => item.id === state.activeQuestionId);
+  const resp = state.responses[team.id] || {};
+
+  let html = `
+    <label style="margin-top:0;">اختر الفريق على الهاتف:</label>
+    <select onchange="simTeamId = this.value; renderSim();">
+      ${state.teams.map(t => `<option value="${t.id}" ${t.id === team.id ? "selected" : ""}>${escapeHtml(t.name)} (${t.score} ن)</option>`).join("")}
+    </select>
+    <div style="margin:8px 0; font-size:0.82rem; color:var(--text-muted);">
+      الحالة: <strong style="color:var(--accent-2);">${escapeHtml(team.lastFeedback || "متصل بالغرفة " + state.pin)}</strong>
+    </div>
+  `;
+
+  if (!q || !state.questionOpen) {
+    html += `<div style="padding:18px; text-align:center; background:var(--bg-card); border-radius:12px;">
+      ⏳ في انتظار فتح السؤال التالي على شاشة العرض...
+    </div>`;
+  } else if (q.type === "buzzer") {
+    const locked = Boolean(state.buzzerLockedBy);
+    const isMe = state.buzzerLockedBy === team.id;
+    html += `
+      <div style="font-weight:700; margin-bottom:10px;">${escapeHtml(q.text)}</div>
+      <button class="buzzer-big-btn" ${locked ? "disabled" : ""} onclick="submitBuzzer('${team.id}')">
+        ${isMe ? "🔔 أنت الأسرع!" : locked ? "🔒 تم قفل الجرس" : "🔔 اضغط للإجابة الآن!"}
+      </button>
+    `;
+  } else if (q.type === "qcm") {
+    const opts = resp.shuffledOptions && resp.shuffledOptions.length ? resp.shuffledOptions : q.options;
+    html += `<div style="font-weight:700; margin-bottom:10px;">${escapeHtml(q.text)}</div>`;
+    if (resp.answer) {
+      html += `<div style="padding:12px; background:rgba(16,185,129,0.2); border-radius:10px; text-align:center;">
+        ✅ تم تسجيل إجابتك: <strong>${escapeHtml(resp.answer)}</strong>
+      </div>`;
+    } else {
+      html += opts.map((opt, idx) => `
+        <button class="phone-opt-btn" onclick="submitTeamAnswer('${team.id}', '${escapeJs(opt)}')">
+          ${["أ", "ب", "ج", "د"][idx] || idx + 1}) ${escapeHtml(opt)}
+        </button>
+      `).join("");
+    }
+  } else {
+    html += `<div style="font-weight:700; margin-bottom:10px;">${escapeHtml(q.text)}</div>`;
+    if (resp.answer) {
+      html += `<div style="padding:12px; background:rgba(16,185,129,0.2); border-radius:10px; text-align:center;">
+        ✅ تم إرسال إجابتك: <strong>${escapeHtml(resp.answer)}</strong>
+      </div>`;
+    } else {
+      html += `
+        <input type="text" id="phoneOpenInput" placeholder="اكتب إجابتك هنا..." />
+        <button class="primary" style="width:100%; margin-top:8px; justify-content:center;" onclick="submitTeamAnswer('${team.id}', document.getElementById('phoneOpenInput').value)">
+          إرسال الإجابة 📤
+        </button>
+      `;
+    }
+  }
+
+  body.innerHTML = html;
+}
+
+function submitTeamAnswer(teamId, ans) {
+  if (!state.questionOpen || !state.activeQuestionId) return;
+  const trimmed = (ans || "").trim();
+  if (!trimmed) return;
+  const elapsed = state.questionStartTime ? ((Date.now() - state.questionStartTime) / 1000).toFixed(1) : "0.0";
+  state.responses[teamId] = {
+    ...(state.responses[teamId] || {}),
+    answer: trimmed,
+    timeSec: parseFloat(elapsed),
+    graded: false
+  };
+  const team = state.teams.find(t => t.id === teamId);
+  if (team) team.lastFeedback = `تم إرسال الإجابة (${elapsed}ث)`;
+  playTone(740, 0.12, "sine");
+  saveState();
+  renderAll();
+}
+
+function submitBuzzer(teamId) {
+  if (!state.questionOpen || state.buzzerLockedBy) return;
+  state.buzzerLockedBy = teamId;
+  const elapsed = state.questionStartTime ? ((Date.now() - state.questionStartTime) / 1000).toFixed(1) : "0.0";
+  state.responses[teamId] = {
+    ...(state.responses[teamId] || {}),
+    answer: "BUZZ",
+    timeSec: parseFloat(elapsed)
+  };
+  const team = state.teams.find(t => t.id === teamId);
+  if (team) team.lastFeedback = `🔔 ضغط الجرس أولاً (${elapsed}ث)`;
+  playTone(980, 0.25, "square");
+  saveState();
+  renderAll();
+}
+
+
+/* Real ISO/IEC 18004 QR Code Generator (Byte Mode, Error Correction Level L, Versions 1-10) */
+const RealQR = (() => {
+  const CAP_L = [0, 17, 32, 53, 78, 106, 134, 154, 192, 230, 271];
+  const TOTAL_CW = [0, 26, 44, 70, 100, 134, 172, 196, 242, 292, 346];
+  const DATA_CW = [0, 19, 34, 55, 80, 108, 136, 156, 194, 232, 274];
+  const ECC_CW = [0, 7, 10, 15, 20, 26, 18, 20, 24, 30, 18]; // per block
+  const BLOCKS = [
+    null,
+    [[1, 19]],
+    [[1, 34]],
+    [[1, 55]],
+    [[1, 80]],
+    [[1, 108]],
+    [[2, 68]],
+    [[2, 78]],
+    [[2, 97]],
+    [[2, 116]],
+    [[2, 68], [2, 69]]
+  ];
+  const ALIGN_POS = [
+    [],
+    [],
+    [6, 18],
+    [6, 22],
+    [6, 26],
+    [6, 30],
+    [6, 34],
+    [6, 22, 38],
+    [6, 24, 42],
+    [6, 26, 46],
+    [6, 28, 50]
+  ];
+
+  // GF(256) with primitive poly 0x11d
+  const EXP = new Uint8Array(512);
+  const LOG = new Uint8Array(256);
+  let x = 1;
+  for (let i = 0; i < 255; i++) {
+    EXP[i] = x;
+    LOG[x] = i;
+    x <<= 1;
+    if (x & 0x100) x ^= 0x11d;
+  }
+  for (let i = 255; i < 512; i++) EXP[i] = EXP[i - 255];
+
+  function gfMul(a, b) {
+    if (a === 0 || b === 0) return 0;
+    return EXP[LOG[a] + LOG[b]];
+  }
+
+  function rsGeneratorPoly(deg) {
+    let poly = [1];
+    for (let i = 0; i < deg; i++) {
+      const next = new Array(poly.length + 1).fill(0);
+      const factor = EXP[i];
+      for (let j = 0; j < poly.length; j++) {
+        next[j] ^= poly[j];
+        next[j + 1] ^= gfMul(poly[j], factor);
+      }
+      poly = next;
+    }
+    return poly;
+  }
+
+  function rsRemainder(data, eccLen) {
+    const gen = rsGeneratorPoly(eccLen);
+    const res = new Uint8Array(data.length + eccLen);
+    res.set(data);
+    for (let i = 0; i < data.length; i++) {
+      const coef = res[i];
+      if (coef !== 0) {
+        for (let j = 0; j < gen.length; j++) {
+          res[i + j] ^= gfMul(gen[j], coef);
+        }
+      }
+    }
+    return res.slice(data.length);
+  }
+
+  function encodeData(bytes) {
+    let ver = 1;
+    while (ver <= 10 && bytes.length > CAP_L[ver]) ver++;
+    if (ver > 10) {
+      bytes = bytes.slice(0, CAP_L[10]);
+      ver = 10;
+    }
+
+    const bits = [];
+    const pushBits = (val, len) => {
+      for (let i = len - 1; i >= 0; i--) bits.push((val >>> i) & 1);
+    };
+
+    // Mode 0100 (Byte), 8-bit length for v1..9, 16-bit for v10+
+    pushBits(0b0100, 4);
+    pushBits(bytes.length, ver >= 10 ? 16 : 8);
+    for (const b of bytes) pushBits(b, 8);
+
+    const totalDataBits = DATA_CW[ver] * 8;
+    const termLen = Math.min(4, totalDataBits - bits.length);
+    pushBits(0, termLen);
+    while (bits.length % 8 !== 0) bits.push(0);
+
+    const codewords = [];
+    for (let i = 0; i < bits.length; i += 8) {
+      let byte = 0;
+      for (let j = 0; j < 8; j++) byte = (byte << 1) | bits[i + j];
+      codewords.push(byte);
+    }
+
+    const padBytes = [0xec, 0x11];
+    let pIdx = 0;
+    while (codewords.length < DATA_CW[ver]) {
+      codewords.push(padBytes[pIdx % 2]);
+      pIdx++;
+    }
+
+    // Split into blocks & compute ECC
+    const spec = BLOCKS[ver];
+    const dataBlocks = [];
+    const eccBlocks = [];
+    let offset = 0;
+    for (const [count, dcw] of spec) {
+      for (let b = 0; b < count; b++) {
+        const blk = codewords.slice(offset, offset + dcw);
+        offset += dcw;
+        dataBlocks.push(blk);
+        eccBlocks.push(Array.from(rsRemainder(blk, ECC_CW[ver])));
+      }
+    }
+
+    const finalBytes = [];
+    const maxDataLen = Math.max(...dataBlocks.map(b => b.length));
+    for (let i = 0; i < maxDataLen; i++) {
+      for (const blk of dataBlocks) if (i < blk.length) finalBytes.push(blk[i]);
+    }
+    for (let i = 0; i < ECC_CW[ver]; i++) {
+      for (const blk of eccBlocks) if (i < blk.length) finalBytes.push(blk[i]);
+    }
+
+    return { ver, finalBytes };
+  }
+
+  function buildMatrix(ver, finalBytes) {
+    const size = ver * 4 + 17;
+    const mat = Array.from({ length: size }, () => new Int8Array(size)); // 0=empty, 1=black, -1=white
+    const fixed = Array.from({ length: size }, () => new Uint8Array(size));
+
+    const setFixed = (r, c, dark) => {
+      if (r < 0 || c < 0 || r >= size || c >= size) return;
+      mat[r][c] = dark ? 1 : -1;
+      fixed[r][c] = 1;
+    };
+
+    const placeFinder = (row, col) => {
+      for (let r = -1; r <= 7; r++) {
+        for (let c = -1; c <= 7; c++) {
+          const inBox = r >= 0 && r <= 6 && c >= 0 && c <= 6;
+          const dark = inBox && (r === 0 || r === 6 || c === 0 || c === 6 || (r >= 2 && r <= 4 && c >= 2 && c <= 4));
+          setFixed(row + r, col + c, dark);
+        }
+      }
+    };
+
+    placeFinder(0, 0);
+    placeFinder(0, size - 7);
+    placeFinder(size - 7, 0);
+
+    // Alignment patterns
+    const pos = ALIGN_POS[ver];
+    for (const r of pos) {
+      for (const c of pos) {
+        if (fixed[r][c]) continue;
+        for (let dr = -2; dr <= 2; dr++) {
+          for (let dc = -2; dc <= 2; dc++) {
+            const dark = Math.abs(dr) === 2 || Math.abs(dc) === 2 || (dr === 0 && dc === 0);
+            setFixed(r + dr, c + dc, dark);
+          }
+        }
+      }
+    }
+
+    // Timing patterns
+    for (let i = 8; i < size - 8; i++) {
+      if (!fixed[6][i]) setFixed(6, i, i % 2 === 0);
+      if (!fixed[i][6]) setFixed(i, 6, i % 2 === 0);
+    }
+
+    // Dark module & reserve format info
+    setFixed(size - 8, 8, true);
+    for (let i = 0; i < 9; i++) {
+      if (!fixed[8][i]) fixed[8][i] = 1;
+      if (!fixed[i][8]) fixed[i][8] = 1;
+    }
+    for (let i = 0; i < 8; i++) {
+      if (!fixed[8][size - 1 - i]) fixed[8][size - 1 - i] = 1;
+      if (!fixed[size - 1 - i][8]) fixed[size - 1 - i][8] = 1;
+    }
+    if (ver >= 7) {
+      for (let r = 0; r < 6; r++) {
+        for (let c = 0; c < 3; c++) {
+          fixed[r][size - 11 + c] = 1;
+          fixed[size - 11 + c][r] = 1;
+        }
+      }
+    }
+
+    // Place data bits in zig-zag
+    const dataBits = [];
+    for (const b of finalBytes) {
+      for (let i = 7; i >= 0; i--) dataBits.push((b >>> i) & 1);
+    }
+
+    let bitIdx = 0;
+    let up = true;
+    for (let col = size - 1; col >= 1; col -= 2) {
+      if (col === 6) col--;
+      for (let step = 0; step < size; step++) {
+        const r = up ? (size - 1 - step) : step;
+        for (let dc = 0; dc < 2; dc++) {
+          const c = col - dc;
+          if (fixed[r][c]) continue;
+          const bit = bitIdx < dataBits.length ? dataBits[bitIdx++] : 0;
+          // Apply mask 0: (r + c) % 2 === 0
+          const masked = bit ^ (((r + c) % 2 === 0) ? 1 : 0);
+          mat[r][c] = masked ? 1 : -1;
+        }
+      }
+      up = !up;
+    }
+
+    // Format info for ECC L (01) and Mask 0 (000) -> 15-bit BCH + XOR 0x5412 = 0x77c4
+    const fmtBits = 0x77c4;
+    const getFmtBit = (i) => (fmtBits >>> i) & 1;
+
+    const coords1 = [
+      [8,0],[8,1],[8,2],[8,3],[8,4],[8,5],[8,7],[8,8],
+      [7,8],[5,8],[4,8],[3,8],[2,8],[1,8],[0,8]
+    ];
+    const coords2 = [
+      [size-1,8],[size-2,8],[size-3,8],[size-4,8],[size-5,8],[size-6,8],[size-7,8],
+      [8,size-8],[8,size-7],[8,size-6],[8,size-5],[8,size-4],[8,size-3],[8,size-2],[8,size-1]
+    ];
+    for (let i = 0; i < 15; i++) {
+      const dark = getFmtBit(14 - i) === 1;
+      const [r1, c1] = coords1[i];
+      const [r2, c2] = coords2[i];
+      mat[r1][c1] = dark ? 1 : -1;
+      mat[r2][c2] = dark ? 1 : -1;
+    }
+
+    // Version info for ver >= 7
+    if (ver >= 7) {
+      const VER_INFO = { 7: 0x07c94, 8: 0x085bc, 9: 0x09a99, 10: 0x0a4d3 };
+      const vBits = VER_INFO[ver] || 0;
+      for (let i = 0; i < 18; i++) {
+        const dark = ((vBits >>> i) & 1) === 1;
+        const r = Math.floor(i / 3);
+        const c = size - 11 + (i % 3);
+        mat[r][c] = dark ? 1 : -1;
+        mat[c][r] = dark ? 1 : -1;
+      }
+    }
+
+    return mat;
+  }
+
+  function renderToCanvas(canvas, text) {
+    if (!canvas) return;
+    const bytes = new TextEncoder().encode(text);
+    const { ver, finalBytes } = encodeData(bytes);
+    const mat = buildMatrix(ver, finalBytes);
+    const size = mat.length;
+    const quiet = 4;
+    const totalModules = size + quiet * 2;
+    const pxSize = canvas.width;
+    const scale = Math.floor(pxSize / totalModules) || 4;
+    const realPx = totalModules * scale;
+    canvas.width = realPx;
+    canvas.height = realPx;
+
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, realPx, realPx);
+    ctx.fillStyle = "#000000";
+
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        if (mat[r][c] === 1) {
+          ctx.fillRect((c + quiet) * scale, (r + quiet) * scale, scale, scale);
+        }
+      }
+    }
+  }
+
+  return { renderToCanvas };
+})();
+
+/* QR & Devices */
+function getQrPayload() {
+  const customBase = (state.customBaseUrl || "").trim();
+  if (customBase) {
+    const sep = customBase.includes("?") ? "&" : "?";
+    return `${customBase}${sep}join=${state.pin}`;
+  }
+  if (window.location.protocol === "http:" || window.location.protocol === "https:") {
+    return `${window.location.origin}${window.location.pathname}?join=${state.pin}`;
+  }
+  return `ROOM-PIN:${state.pin}`;
+}
+
+function updateCustomBaseUrl(val) {
+  state.customBaseUrl = val.trim();
+  saveState(false);
+  renderQrModal();
+}
+
+function downloadQrImage() {
+  const canvas = document.getElementById("qrCanvas");
+  if (!canvas) return;
+  const a = document.createElement("a");
+  a.href = canvas.toDataURL("image/png");
+  a.download = `QR_غرفة_${state.pin}.png`;
+  a.click();
+}
+
+function copyJoinLink() {
+  const payload = getQrPayload();
+  navigator.clipboard?.writeText(payload);
+  showToast("تم نسخ محتوى QR: " + payload);
+}
+
+function renderQrModal() {
+  document.getElementById("roomPinText").textContent = state.pin;
+  const payload = getQrPayload();
+  document.getElementById("joinUrlText").textContent = payload;
+  const baseInput = document.getElementById("customBaseUrlInput");
+  if (baseInput && document.activeElement !== baseInput) {
+    baseInput.value = state.customBaseUrl || "";
+  }
+  document.getElementById("syncModeSelect").value = state.syncMode;
+  document.getElementById("firebaseConfigBox").style.display = state.syncMode === "firebase" ? "block" : "none";
+  document.getElementById("firebaseUrlInput").value = state.firebaseUrl || "";
+
+  RealQR.renderToCanvas(document.getElementById("qrCanvas"), payload);
+
+  const list = document.getElementById("connectedDevicesList");
+  list.innerHTML = state.teams.map(t => `
+    <div class="resp-chip answered">
+      <strong>${escapeHtml(t.name)}</strong> (${t.score} ن)
+      <button style="padding:2px 6px; font-size:0.72rem; margin-right:6px;" onclick="toggleTeamConn('${t.id}')">${t.connected ? "فصل" : "إعادة ربط"}</button>
+    </div>
+  `).join("");
+}
+
+function changeSyncMode(val) {
+  state.syncMode = val;
+  saveState();
+  renderQrModal();
+}
+
+function saveFirebaseConfig() {
+  state.firebaseUrl = document.getElementById("firebaseUrlInput").value.trim();
+  saveState();
+  showToast("تم حفظ إعدادات Firebase");
+}
+
+function regeneratePin() {
+  state.pin = String(Math.floor(10000 + Math.random() * 90000));
+  saveState();
+  renderAll();
+  showToast("تم توليد رمز غرفة جديد: " + state.pin);
+}
+
+function toggleTeamConn(teamId) {
+  const t = state.teams.find(item => item.id === teamId);
+  if (t) t.connected = !t.connected;
+  saveState();
+  renderAll();
+}
+
+/* Question Editor */
+function openQuestionEditor(qId = null) {
+  const sel = document.getElementById("qDomainSelect");
+  sel.innerHTML = state.domains.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("");
+
+  if (qId) {
+    const q = state.questions.find(item => item.id === qId);
+    if (!q) return;
+    document.getElementById("qModalTitle").textContent = "تعديل السؤال";
+    document.getElementById("editQId").value = q.id;
+    sel.value = q.domain;
+    document.getElementById("qTypeSelect").value = q.type;
+    document.getElementById("qTextInput").value = q.text;
+    document.getElementById("opt0").value = q.options?.[0] || "";
+    document.getElementById("opt1").value = q.options?.[1] || "";
+    document.getElementById("opt2").value = q.options?.[2] || "";
+    document.getElementById("opt3").value = q.options?.[3] || "";
+    document.getElementById("qCorrectOptInput").value = q.type === "qcm" ? (q.answer || "") : "";
+    document.getElementById("qAnswerInput").value = q.type !== "qcm" ? (q.answer || "") : "";
+    document.getElementById("qPointsSelect").value = String(q.points || 2);
+    document.getElementById("qTimeInput").value = q.time || 30;
+    document.getElementById("qImageData").value = q.image || "";
+  } else {
+    document.getElementById("qModalTitle").textContent = "إضافة سؤال جديد";
+    document.getElementById("editQId").value = "";
+    document.getElementById("qTypeSelect").value = "qcm";
+    document.getElementById("qTextInput").value = "";
+    document.getElementById("opt0").value = "";
+    document.getElementById("opt1").value = "";
+    document.getElementById("opt2").value = "";
+    document.getElementById("opt3").value = "";
+    document.getElementById("qCorrectOptInput").value = "";
+    document.getElementById("qAnswerInput").value = "";
+    document.getElementById("qPointsSelect").value = "2";
+    document.getElementById("qTimeInput").value = "30";
+    document.getElementById("qImageData").value = "";
+  }
+  toggleQcmFields();
+  document.getElementById("questionModal").classList.add("open");
+}
+
+function toggleQcmFields() {
+  const t = document.getElementById("qTypeSelect").value;
+  document.getElementById("qcmFieldsWrap").style.display = t === "qcm" ? "block" : "none";
+  document.getElementById("openAnswerWrap").style.display = t !== "qcm" ? "block" : "none";
+}
+
+function handleQuestionImageUpload(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    document.getElementById("qImageData").value = reader.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function saveQuestion() {
+  const text = document.getElementById("qTextInput").value.trim();
+  if (!text) return showToast("يرجى إدخال نص السؤال");
+  const type = document.getElementById("qTypeSelect").value;
+  const domain = document.getElementById("qDomainSelect").value;
+  const points = parseInt(document.getElementById("qPointsSelect").value, 10) || 2;
+  const time = parseInt(document.getElementById("qTimeInput").value, 10) || 30;
+  const image = document.getElementById("qImageData").value || "";
+
+  let options = [];
+  let answer = "";
+  if (type === "qcm") {
+    options = [
+      document.getElementById("opt0").value.trim(),
+      document.getElementById("opt1").value.trim(),
+      document.getElementById("opt2").value.trim(),
+      document.getElementById("opt3").value.trim()
+    ].filter(Boolean);
+    answer = document.getElementById("qCorrectOptInput").value.trim();
+  } else {
+    answer = document.getElementById("qAnswerInput").value.trim();
+  }
+
+  const editId = document.getElementById("editQId").value;
+  if (editId) {
+    const q = state.questions.find(item => item.id === editId);
+    if (q) Object.assign(q, { domain, type, text, options, answer, points, time, image });
+  } else {
+    state.questions.push({
+      id: "q_" + Date.now(),
+      domain, type, text, options, answer, points, time, image, done: false
+    });
+  }
+
+  saveState();
+  renderDomains();
+  closeModal("questionModal");
+  showToast("تم حفظ السؤال بنجاح");
+}
+
+/* Settings & Logo */
+function openSettingsModal() {
+  document.getElementById("setQuizTitle").value = state.title;
+  document.getElementById("setSchoolName").value = state.school;
+  document.getElementById("setTheme").value = state.theme || "";
+  document.getElementById("setDomains").value = state.domains.join("، ");
+  document.getElementById("setTeams").value = state.teams.map(t => t.name).join("، ");
+  document.getElementById("settingsModal").classList.add("open");
+}
+
+function handleLogoUpload(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    state.logoData = reader.result;
+    state.logoVisible = true;
+    saveState();
+    renderAll();
+    showToast("تم تحديث الشعار");
+  };
+  reader.readAsDataURL(file);
+}
+
+function resetLogo() {
+  state.logoData = "";
+  state.logoVisible = true;
+  saveState();
+  renderAll();
+}
+
+function toggleLogoVisibility() {
+  state.logoVisible = !state.logoVisible;
+  saveState();
+  renderAll();
+}
+
+function saveSettings() {
+  state.title = document.getElementById("setQuizTitle").value.trim() || state.title;
+  state.school = document.getElementById("setSchoolName").value.trim() || state.school;
+  state.theme = document.getElementById("setTheme").value;
+
+  const doms = document.getElementById("setDomains").value.split(/[,،]/).map(s => s.trim()).filter(Boolean);
+  if (doms.length) state.domains = doms;
+
+  const teamNames = document.getElementById("setTeams").value.split(/[,،]/).map(s => s.trim()).filter(Boolean);
+  if (teamNames.length) {
+    state.teams = teamNames.map((name, i) => {
+      const existing = state.teams[i];
+      return existing ? { ...existing, name } : {
+        id: "t_" + Date.now() + "_" + i,
+        name, score: 0, roundScores: [0,0,0], domainHits: {},
+        jokers: { double: false, fifty: false, audience: false },
+        armedDouble: false, connected: true, lastFeedback: ""
+      };
+    });
+  }
+
+  saveState();
+  renderAll();
+  closeModal("settingsModal");
+  showToast("تم حفظ الإعدادات");
+}
+
+/* Rounds & Leaderboard */
+function addRound() {
+  const name = prompt("اسم الجولة الجديدة:", `الجولة ${state.rounds.length + 1}`);
+  if (!name) return;
+  state.rounds.push(name.trim());
+  state.currentRound = state.rounds.length - 1;
+  saveState();
+  renderAll();
+}
+
+function advanceTopTeams() {
+  const sorted = [...state.teams].sort((a, b) => b.score - a.score);
+  const topTwo = sorted.slice(0, 2).map(t => t.id);
+  state.qualifiedTeams = topTwo;
+  if (state.currentRound < state.rounds.length - 1) state.currentRound++;
+  saveState();
+  renderAll();
+  showToast("تم تصعيد المتصدرين إلى الجولة التالية");
+}
+
+function resetCurrentRoundScores() {
+  state.teams.forEach(t => {
+    t.score = 0;
+    t.domainHits = {};
+    t.lastFeedback = "";
+  });
+  saveState();
+  renderAll();
+  showToast("تم تصفير النقاط");
+}
+
+function openLeaderboard() {
+  const sorted = [...state.teams].sort((a, b) => b.score - a.score);
+  const medals = ["🥇", "🥈", "🥉"];
+  document.getElementById("leaderboardBody").innerHTML = `
+    <table>
+      <thead><tr><th>الرتبة</th><th>الفريق</th><th>النقاط</th><th>الحالة</th></tr></thead>
+      <tbody>
+        ${sorted.map((t, idx) => `
+          <tr>
+            <td>${medals[idx] || (idx + 1)}</td>
+            <td><strong>${escapeHtml(t.name)}</strong></td>
+            <td><strong>${t.score}</strong></td>
+            <td>${state.qualifiedTeams.includes(t.id) ? "⭐ متأهل" : "مشارك"}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+  document.getElementById("leaderboardModal").classList.add("open");
+}
+
+/* Import & Export (Excel / CSV / JSON) */
+function openImportExportModal() {
+  document.getElementById("ioModal").classList.add("open");
+}
+
+function downloadFile(filename, content, mime = "application/octet-stream") {
+  const blob = new Blob([content], { type: mime });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function exportQuestionsExcel() {
+  const rows = state.questions.map(q => `
+    <tr>
+      <td>${escapeHtml(q.domain)}</td>
+      <td>${escapeHtml(q.type)}</td>
+      <td>${escapeHtml(q.text)}</td>
+      <td>${escapeHtml(q.answer || "")}</td>
+      <td>${q.points || 2}</td>
+      <td>${escapeHtml(q.options?.[0] || "")}</td>
+      <td>${escapeHtml(q.options?.[1] || "")}</td>
+      <td>${escapeHtml(q.options?.[2] || "")}</td>
+      <td>${escapeHtml(q.options?.[3] || "")}</td>
+    </tr>
+  `).join("");
+
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+    <head><meta charset="UTF-8" /></head><body dir="rtl">
+    <table border="1">
+      <thead><tr><th>المحور</th><th>النوع</th><th>السؤال</th><th>الإجابة</th><th>النقاط</th><th>خيار 1</th><th>خيار 2</th><th>خيار 3</th><th>خيار 4</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></body></html>`;
+  downloadFile("بنك_أسئلة_المسابقة.xls", "\ufeff" + html, "application/vnd.ms-excel;charset=utf-8");
+}
+
+function downloadExcelTemplate() {
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+    <head><meta charset="UTF-8" /></head><body dir="rtl">
+    <table border="1">
+      <thead><tr><th>المحور</th><th>النوع (qcm/open/buzzer)</th><th>السؤال</th><th>الإجابة</th><th>النقاط</th><th>خيار 1</th><th>خيار 2</th><th>خيار 3</th><th>خيار 4</th></tr></thead>
+      <tbody>
+        <tr><td>الثقافة والذاكرة الوطنية</td><td>qcm</td><td>كم عدد أقاليم المسيرة الخضراء؟</td><td>12</td><td>2</td><td>10</td><td>12</td><td>14</td><td>16</td></tr>
+        <tr><td>العلوم والبيئة البحرية</td><td>open</td><td>ما رمز الماء الكيميائي؟</td><td>H2O</td><td>1</td><td></td><td></td><td></td><td></td></tr>
+      </tbody>
+    </table></body></html>`;
+  downloadFile("نموذج_إكسل_الأسئلة.xls", "\ufeff" + html, "application/vnd.ms-excel;charset=utf-8");
+}
+
+function exportStateJson() {
+  downloadFile("مسابقة_ثانوية_الوليدية.json", JSON.stringify(state, null, 2), "application/json;charset=utf-8");
+}
+
+function handleImportFile(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const txt = String(reader.result || "");
+    if (file.name.toLowerCase().endsWith(".json")) {
+      try {
+        const parsed = JSON.parse(txt);
+        if (Array.isArray(parsed.questions)) {
+          state = { ...state, ...parsed };
+          saveState();
+          renderAll();
+          closeModal("ioModal");
+          showToast("تم استيراد ملف JSON بنجاح");
+        }
+      } catch (e) {
+        showToast("تعذر قراءة ملف JSON");
+      }
+      return;
+    }
+
+    if (txt.includes("<table") || txt.includes("<tr")) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(txt, "text/html");
+      const trs = [...doc.querySelectorAll("tbody tr")];
+      const rows = trs.map(tr => [...tr.children].map(td => td.textContent.trim()).join("\t"));
+      document.getElementById("bulkPasteArea").value = rows.join("\n");
+    } else {
+      document.getElementById("bulkPasteArea").value = txt;
+    }
+    showToast("تم تحميل محتوى الملف — اختر إضافة أو استبدال");
+  };
+  reader.readAsText(file, "UTF-8");
+}
+
+function importPastedRows(replaceExisting) {
+  const raw = document.getElementById("bulkPasteArea").value.trim();
+  if (!raw) return showToast("لا توجد بيانات للاستيراد");
+
+  const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const imported = [];
+
+  lines.forEach((line, idx) => {
+    const sep = line.includes("\t") ? "\t" : (line.includes(";") ? ";" : ",");
+    const cols = line.split(sep).map(c => c.trim());
+    if (idx === 0 && (cols[0] === "المحور" || cols[2] === "السؤال")) return;
+    if (!cols[2]) return;
+
+    const domain = cols[0] || state.domains[0] || "عام";
+    if (!state.domains.includes(domain)) state.domains.push(domain);
+
+    const rawType = (cols[1] || "qcm").toLowerCase();
+    const type = ["qcm", "open", "buzzer"].includes(rawType) ? rawType : "qcm";
+    const text = cols[2];
+    const answer = cols[3] || "";
+    const points = parseInt(cols[4], 10) || 2;
+    const options = [cols[5], cols[6], cols[7], cols[8]].filter(Boolean);
+
+    imported.push({
+      id: "q_imp_" + Date.now() + "_" + idx,
+      domain, type, text, answer, points, options, time: 30, done: false
+    });
+  });
+
+  if (!imported.length) return showToast("لم يتم العثور على أسئلة صالحة");
+  state.questions = replaceExisting ? imported : [...state.questions, ...imported];
+  saveState();
+  renderAll();
+  closeModal("ioModal");
+  showToast(`تم استيراد ${imported.length} سؤالاً بنجاح`);
+}
+
+/* Stats & Results Excel */
+function openStatsModal() {
+  const sorted = [...state.teams].sort((a, b) => b.score - a.score);
+  const domHeaders = state.domains.map(d => `<th>${escapeHtml(d)}</th>`).join("");
+  const rows = sorted.map((t, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td>${escapeHtml(t.name)}</td>
+      ${state.domains.map(d => `<td>${t.domainHits?.[d] || 0}</td>`).join("")}
+      <td><strong>${t.score}</strong></td>
+    </tr>
+  `).join("");
+
+  document.getElementById("statsTableWrap").innerHTML = `
+    <table>
+      <thead><tr><th>الرتبة</th><th>الفريق</th>${domHeaders}<th>المجموع</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+  document.getElementById("statsModal").classList.add("open");
+}
+
+function exportResultsExcel() {
+  const sorted = [...state.teams].sort((a, b) => b.score - a.score);
+  const rows = sorted.map((t, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td>${escapeHtml(t.name)}</td>
+      ${state.domains.map(d => `<td>${t.domainHits?.[d] || 0}</td>`).join("")}
+      <td>${t.score}</td>
+    </tr>
+  `).join("");
+
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+    <head><meta charset="UTF-8" /></head><body dir="rtl">
+    <h3>نتائج ${escapeHtml(state.title)} — ${escapeHtml(state.school)}</h3>
+    <table border="1">
+      <thead><tr><th>الرتبة</th><th>الفريق</th>${state.domains.map(d => `<th>${escapeHtml(d)}</th>`).join("")}<th>المجموع</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></body></html>`;
+  downloadFile("نتائج_المسابقة_المدرسية.xls", "\ufeff" + html, "application/vnd.ms-excel;charset=utf-8");
+}
+
+/* Podium & Certificate */
+function openPodiumModal() {
+  document.getElementById("certMembersInput").value = state.certMembers || "";
+  renderCertificate();
+  document.getElementById("podiumModal").classList.add("open");
+}
+
+function renderCertificate() {
+  state.certMembers = document.getElementById("certMembersInput").value;
+  const sorted = [...state.teams].sort((a, b) => b.score - a.score);
+  const winner = sorted[0] || { name: "الفريق المتوج", score: 0 };
+
+  document.getElementById("certificateCard").innerHTML = `
+    <div style="font-size:0.95rem; color:#6b7280;">${escapeHtml(state.school)}</div>
+    <h2>شهادة تقدير واستحقاق</h2>
+    <p style="font-size:1.1rem; margin:12px 0;">تمنح إدارة ومنظمو <strong>«${escapeHtml(state.title)}»</strong> هذه الشهادة تقديراً للتميز والفوز بالمركز الأول لـ:</p>
+    <div style="font-size:1.65rem; font-weight:800; color:#0f766e; margin:10px 0;">${escapeHtml(winner.name)}</div>
+    <div style="font-size:1rem; color:#374151; margin-bottom:12px;">الأعضاء: <strong>${escapeHtml(state.certMembers || "—")}</strong></div>
+    <div style="font-size:1.1rem; font-weight:700; color:#b45309;">الرصيد النهائي: ${winner.score} نقطة</div>
+  `;
+}
+
+/* Helpers */
+function openModal(id) { document.getElementById(id).classList.add("open"); }
+function closeModal(id) { document.getElementById(id).classList.remove("open"); }
+function toggleFullscreen() {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+  else document.exitFullscreen?.();
+}
+function printSection(id) {
+  window.print();
+}
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+function fullResetAll() {
+  if (!confirm("هل أنت متأكد من إعادة ضبط كافة البيانات والأسئلة والنتائج؟")) return;
+  localStorage.removeItem(STORAGE_KEY);
+  state = createDefaultState();
+  saveState();
+  renderAll();
+  closeModal("settingsModal");
+  showToast("تمت إعادة الضبط الشاملة");
+}
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+}
+function escapeJs(s) {
+  return String(s ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+if (channel) {
+  channel.onmessage = (ev) => {
+    if (ev.data?.type === "STATE_UPDATE") {
+      state = { ...state, ...ev.data.state };
+      renderAll();
+    }
+  };
+}
+
+renderAll();
+</script>
+</body>
+</html>
