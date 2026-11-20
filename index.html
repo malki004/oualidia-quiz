@@ -994,6 +994,7 @@ function loadState() {
 }
 
 function saveState(broadcast = true) {
+  stampStateChange();
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (e) {}
@@ -1207,23 +1208,27 @@ function quickDeleteTeam(teamId) {
   showToast("تم حذف الفريق");
 }
 
-function adjustScore(teamId, delta, domainName = null) {
+function adjustScore(teamId, delta, domainName = null, shouldRender = true) {
   const team = state.teams.find(t => t.id === teamId);
   if (!team) return;
-  let actualDelta = delta;
-  if (delta > 0 && team.armedDouble) {
-    actualDelta = delta * 2;
+  const currentScore = Number(team.score) || 0;
+  let actualDelta = Number(delta) || 0;
+  if (actualDelta > 0 && team.armedDouble) {
+    actualDelta = actualDelta * 2;
     team.armedDouble = false;
     team.jokers.double = true;
   }
-  team.score = Math.max(0, team.score + actualDelta);
+  team.score = Math.max(0, currentScore + actualDelta);
   if (actualDelta > 0 && domainName) {
-    team.domainHits[domainName] = (team.domainHits[domainName] || 0) + 1;
+    if (!team.domainHits || typeof team.domainHits !== "object") team.domainHits = {};
+    team.domainHits[domainName] = (Number(team.domainHits[domainName]) || 0) + 1;
   }
   team.lastFeedback = actualDelta > 0 ? `أحسنت! +${actualDelta} نقطة` : `تعديل: ${actualDelta} نقطة`;
   if (actualDelta > 0) playTone(880, 0.16, "triangle");
-  saveState();
-  renderAll();
+  saveState(true);
+  if (shouldRender) {
+    renderAll();
+  }
 }
 
 function toggleDoubleJoker(teamId) {
@@ -1390,7 +1395,7 @@ function autoGradeQcm() {
     const isCorrect = submitted === (q.answer || "").trim();
     if (isCorrect) {
       const bonus = (t.id === fastestTeamId) ? 1 : 0;
-      adjustScore(t.id, q.points + bonus, q.domain);
+      adjustScore(t.id, q.points + bonus, q.domain, false);
       t.lastFeedback = `إجابة صحيحة! +${q.points + bonus} ن` + (bonus ? " (سرعة +1)" : "");
     } else {
       t.lastFeedback = "إجابة غير مطابقة";
@@ -2575,19 +2580,29 @@ function registerContestantTeamName() {
 
   localStorage.setItem(deviceTeamKey, contestantTeamId);
   localStorage.setItem("oualidia_contestant_team_" + pin, contestantTeamId);
-  pushContestantUpdate(pin);
+  sendContestantAction(pin, { type: "REGISTER_TEAM", team });
   renderContestantView();
   showToast("تم تسجيل اسم الفريق وعرضه على الشاشة الرئيسية");
 }
 
+let lastLocalWriteTs = 0;
+
+function stampStateChange() {
+  lastLocalWriteTs = Date.now();
+  state.updatedAt = lastLocalWriteTs;
+}
+
 function mergeRemoteState(remote) {
   if (!remote || typeof remote !== "object") return false;
+  if (typeof remote.updatedAt === "number" && remote.updatedAt < lastLocalWriteTs - 300) {
+    return false;
+  }
   const localSig = JSON.stringify({
     activeQuestionId: state.activeQuestionId,
     questionOpen: state.questionOpen,
     buzzerLockedBy: state.buzzerLockedBy,
     responses: state.responses,
-    teams: state.teams.map(t => ({ id: t.id, name: t.name, score: t.score, connected: t.connected, lastFeedback: t.lastFeedback }))
+    teams: (state.teams || []).map(t => ({ id: t.id, name: t.name, score: t.score, connected: t.connected, lastFeedback: t.lastFeedback }))
   });
   const remoteSig = JSON.stringify({
     activeQuestionId: remote.activeQuestionId,
@@ -2598,15 +2613,148 @@ function mergeRemoteState(remote) {
   });
 
   const prevAns = contestantTeamId ? state.responses?.[contestantTeamId]?.answer : null;
-  state = { ...state, ...remote };
+  state = {
+    ...state,
+    ...remote,
+    teams: Array.isArray(remote.teams) ? remote.teams : state.teams,
+    questions: Array.isArray(remote.questions) ? remote.questions : state.questions,
+    domains: Array.isArray(remote.domains) ? remote.domains : state.domains,
+    responses: (remote.responses && typeof remote.responses === "object") ? remote.responses : (state.responses || {})
+  };
   if (contestantTeamId && prevAns && state.responses?.[contestantTeamId] && !state.responses[contestantTeamId].answer) {
     state.responses[contestantTeamId].answer = prevAns;
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {}
   return localSig !== remoteSig;
 }
 
+async function sendContestantAction(pin, actionPayload) {
+  stampStateChange();
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {}
+  if (channel) channel.postMessage({ type: "STATE_UPDATE", state });
+
+  if (!getEffectiveFirebaseUrl()) return;
+  const base = getEffectiveFirebaseUrl().replace(/\/+$/, "");
+  const actionId = "act_" + Date.now() + "_" + Math.floor(Math.random() * 100000);
+  try {
+    await fetch(`${base}/quiz_rooms/${pin}/actions/${actionId}.json`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...actionPayload, ts: Date.now() })
+    });
+    await fetch(`${base}/quiz_rooms/${pin}.json`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        teams: state.teams,
+        responses: state.responses,
+        buzzerLockedBy: state.buzzerLockedBy,
+        updatedAt: state.updatedAt
+      })
+    });
+  } catch (e) {}
+}
+
+async function applyIncomingActions(pin, actionsObj) {
+  if (!actionsObj || typeof actionsObj !== "object") return false;
+  const entries = Object.entries(actionsObj)
+    .filter(([, v]) => v && typeof v === "object")
+    .sort((a, b) => (a[1].ts || 0) - (b[1].ts || 0));
+
+  if (!entries.length) return false;
+  let mutated = false;
+
+  for (const [, act] of entries) {
+    if (act.type === "REGISTER_TEAM" && act.team) {
+      const existingById = state.teams.find(t => t.id === act.team.id);
+      if (existingById) {
+        if (!isDuplicateTeamName(act.team.name, existingById.id)) {
+          existingById.name = act.team.name;
+          existingById.connected = true;
+          existingById.lastFeedback = "متصل باسم: " + act.team.name;
+          mutated = true;
+        }
+      } else if (!isDuplicateTeamName(act.team.name, null)) {
+        state.teams.push({
+          ...act.team,
+          score: Number(act.team.score) || 0,
+          connected: true
+        });
+        if (!state.responses) state.responses = {};
+        if (!state.responses[act.team.id]) {
+          const q = state.questions.find(item => item.id === state.activeQuestionId);
+          state.responses[act.team.id] = {
+            answer: "",
+            shuffledOptions: q && q.type === "qcm" ? shuffleArray([...q.options]) : [],
+            timeSec: null,
+            graded: false
+          };
+        }
+        mutated = true;
+      }
+    } else if (act.type === "BUZZ" && act.teamId) {
+      if (state.questionOpen && !state.buzzerLockedBy) {
+        state.buzzerLockedBy = act.teamId;
+        if (!state.responses) state.responses = {};
+        state.responses[act.teamId] = {
+          ...(state.responses[act.teamId] || {}),
+          answer: "BUZZ",
+          timeSec: act.timeSec ?? 0
+        };
+        const team = state.teams.find(t => t.id === act.teamId);
+        if (team) team.lastFeedback = `🔔 ضغط الجرس أولاً (${act.timeSec ?? 0}ث)`;
+        playTone(980, 0.25, "square");
+        mutated = true;
+      }
+    } else if (act.type === "ANSWER" && act.teamId) {
+      if (state.questionOpen && state.activeQuestionId) {
+        if (!state.responses) state.responses = {};
+        state.responses[act.teamId] = {
+          ...(state.responses[act.teamId] || {}),
+          answer: act.answer,
+          timeSec: act.timeSec ?? 0,
+          graded: false
+        };
+        const team = state.teams.find(t => t.id === act.teamId);
+        if (team) team.lastFeedback = `تم إرسال الإجابة (${act.timeSec ?? 0}ث)`;
+        mutated = true;
+      }
+    }
+  }
+
+  if (mutated) {
+    stampStateChange();
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {}
+    if (channel) channel.postMessage({ type: "STATE_UPDATE", state });
+    if (getEffectiveFirebaseUrl()) {
+      const base = getEffectiveFirebaseUrl().replace(/\/+$/, "");
+      try {
+        await fetch(`${base}/quiz_rooms/${pin}.json`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(state)
+        });
+        await fetch(`${base}/quiz_rooms/${pin}/actions.json`, { method: "DELETE" });
+      } catch (e) {}
+    }
+  } else if (getEffectiveFirebaseUrl()) {
+    const base = getEffectiveFirebaseUrl().replace(/\/+$/, "");
+    try {
+      await fetch(`${base}/quiz_rooms/${pin}/actions.json`, { method: "DELETE" });
+    } catch (e) {}
+  }
+
+  return mutated;
+}
+
 async function pushContestantUpdate(pin) {
+  stampStateChange();
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (e) {}
@@ -2630,6 +2778,16 @@ function startSupervisorSyncLoop() {
     if (isContestantView || !getEffectiveFirebaseUrl()) return;
     const base = getEffectiveFirebaseUrl().replace(/\/+$/, "");
     try {
+      const actRes = await fetch(`${base}/quiz_rooms/${state.pin}/actions.json`, { cache: "no-store" });
+      if (actRes.ok) {
+        const actionsObj = await actRes.json();
+        const hadActions = await applyIncomingActions(state.pin, actionsObj);
+        if (hadActions) {
+          renderAll();
+          renderSim();
+          return;
+        }
+      }
       const res = await fetch(`${base}/quiz_rooms/${state.pin}.json`, { cache: "no-store" });
       if (res.ok) {
         const remote = await res.json();
@@ -2643,7 +2801,7 @@ function startSupervisorSyncLoop() {
       }
     } catch (e) {}
   };
-  supervisorPollTimer = setInterval(pollSup, 1200);
+  supervisorPollTimer = setInterval(pollSup, 900);
 }
 
 function startRemoteSyncLoop(pin) {
@@ -2670,7 +2828,7 @@ function startRemoteSyncLoop(pin) {
     }
   };
   poll();
-  firebasePollTimer = setInterval(poll, 1200);
+  firebasePollTimer = setInterval(poll, 900);
 }
 
 function renderContestantView() {
@@ -2685,13 +2843,24 @@ function renderContestantView() {
   const team = myRegId ? state.teams.find(t => t.id === myRegId) : null;
   if (team) contestantTeamId = team.id;
 
-  const customInp = document.getElementById("cCustomTeamInput");
-  if (customInp && team && document.activeElement !== customInp && !customInp.value) {
-    customInp.value = team.name;
+  const teamBox = document.getElementById("cTeamSelectBox");
+  if (team) {
+    teamBox.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; background:var(--bg-card-2); padding:10px 14px; border-radius:12px; border:1px solid var(--border);">
+        <div style="font-weight:800; font-size:1rem;">فريقك: <span style="color:var(--accent-2);">${escapeHtml(team.name)}</span></div>
+        <div style="font-weight:700; font-size:0.92rem; color:var(--accent-2);">الرصيد: ${team.score} نقطة</div>
+      </div>
+    `;
+  } else {
+    teamBox.innerHTML = `
+      <label style="margin-top:0;">اكتب اسم فريقك بعد مسح QR:</label>
+      <div style="display:flex; gap:8px; margin-top:6px;">
+        <input type="text" id="cCustomTeamInput" placeholder="اكتب اسم فريقك هنا..." />
+        <button class="primary" type="button" onclick="registerContestantTeamName()" style="white-space:nowrap;">تأكيد الاسم</button>
+      </div>
+      <div style="margin-top:10px; font-size:0.86rem; color:var(--text-muted);" id="cTeamScoreBox">يرجى كتابة اسم فريقك أعلاه والضغط على تأكيد الاسم</div>
+    `;
   }
-  document.getElementById("cTeamScoreBox").textContent = team
-    ? `فريقك المسجل: ${team.name} · الرصيد الحالي: ${team.score} نقطة`
-    : "يرجى كتابة اسم فريقك أعلاه والضغط على تأكيد الاسم";
 
   const stage = document.getElementById("cStageArea");
   const q = state.questions.find(item => item.id === state.activeQuestionId);
@@ -2714,7 +2883,7 @@ function renderContestantView() {
     const locked = Boolean(state.buzzerLockedBy);
     const isMe = team && state.buzzerLockedBy === team.id;
     bodyHtml += `
-      <button class="buzzer-big-btn" ${locked || !team ? "disabled" : ""} onclick="contestantBuzz('${team?.id}')">
+      <button type="button" class="buzzer-big-btn" ${locked || !team ? "disabled" : ""} onclick="contestantBuzz()">
         ${isMe ? "🔔 أنت الأسرع!" : locked ? "🔒 تم قفل الجرس" : "🔔 اضغط للإجابة الآن!"}
       </button>
     `;
@@ -2726,7 +2895,7 @@ function renderContestantView() {
       </div>`;
     } else {
       bodyHtml += opts.map((opt, idx) => `
-        <button class="phone-opt-btn" onclick="contestantAnswer('${team?.id}', '${escapeJs(opt)}')">
+        <button type="button" class="phone-opt-btn" ${!team ? "disabled" : ""} onclick="contestantAnswer('${escapeJs(opt)}')">
           ${["أ", "ب", "ج", "د"][idx] || idx + 1}) ${escapeHtml(opt)}
         </button>
       `).join("");
@@ -2739,7 +2908,7 @@ function renderContestantView() {
     } else {
       bodyHtml += `
         <input type="text" id="cOpenAnswerInput" placeholder="اكتب إجابتك هنا..." />
-        <button class="primary" style="width:100%; margin-top:10px; justify-content:center; padding:12px;" onclick="contestantAnswer('${team?.id}', document.getElementById('cOpenAnswerInput').value)">
+        <button type="button" class="primary" style="width:100%; margin-top:10px; justify-content:center; padding:12px;" ${!team ? "disabled" : ""} onclick="contestantAnswer(document.getElementById('cOpenAnswerInput').value)">
           إرسال الإجابة 📤
         </button>
       `;
@@ -2749,39 +2918,46 @@ function renderContestantView() {
   stage.innerHTML = bodyHtml;
 }
 
-function contestantAnswer(teamId, ans) {
+function getActiveContestantTeamId() {
+  const pin = getTargetRoomPin();
+  return localStorage.getItem("oualidia_qr_registered_team_" + pin) || contestantTeamId;
+}
+
+function contestantAnswer(ans) {
+  const teamId = getActiveContestantTeamId();
   if (!teamId || !state.questionOpen || !state.activeQuestionId) return;
   const trimmed = (ans || "").trim();
   if (!trimmed) return;
-  const elapsed = state.questionStartTime ? ((Date.now() - state.questionStartTime) / 1000).toFixed(1) : "0.0";
+  const elapsed = state.questionStartTime ? Math.max(0.1, parseFloat(((Date.now() - state.questionStartTime) / 1000).toFixed(1))) : 0.5;
   if (!state.responses) state.responses = {};
   state.responses[teamId] = {
     ...(state.responses[teamId] || {}),
     answer: trimmed,
-    timeSec: parseFloat(elapsed),
+    timeSec: elapsed,
     graded: false
   };
   const team = state.teams.find(t => t.id === teamId);
   if (team) team.lastFeedback = `تم إرسال الإجابة (${elapsed}ث)`;
   playTone(740, 0.12, "sine");
-  pushContestantUpdate(getTargetRoomPin());
+  sendContestantAction(getTargetRoomPin(), { type: "ANSWER", teamId, answer: trimmed, timeSec: elapsed });
   renderContestantView();
 }
 
-function contestantBuzz(teamId) {
+function contestantBuzz() {
+  const teamId = getActiveContestantTeamId();
   if (!teamId || !state.questionOpen || state.buzzerLockedBy) return;
+  const elapsed = state.questionStartTime ? Math.max(0.1, parseFloat(((Date.now() - state.questionStartTime) / 1000).toFixed(1))) : 0.5;
   state.buzzerLockedBy = teamId;
-  const elapsed = state.questionStartTime ? ((Date.now() - state.questionStartTime) / 1000).toFixed(1) : "0.0";
   if (!state.responses) state.responses = {};
   state.responses[teamId] = {
     ...(state.responses[teamId] || {}),
     answer: "BUZZ",
-    timeSec: parseFloat(elapsed)
+    timeSec: elapsed
   };
   const team = state.teams.find(t => t.id === teamId);
   if (team) team.lastFeedback = `🔔 ضغط الجرس أولاً (${elapsed}ث)`;
   playTone(980, 0.25, "square");
-  pushContestantUpdate(getTargetRoomPin());
+  sendContestantAction(getTargetRoomPin(), { type: "BUZZ", teamId, timeSec: elapsed });
   renderContestantView();
 }
 
