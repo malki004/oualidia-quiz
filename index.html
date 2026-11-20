@@ -796,6 +796,12 @@
     <label>أسماء الفرق (مفصولة بفاصلة):</label>
     <input type="text" id="setTeams" placeholder="فريق المسيرة, فريق الأمل, فريق التحدي, فريق النجاح" />
 
+    <label>تفعيل واجهة المتسابق عند الدخول عبر الرابط/QR (يتحكم به المشرف من المنصة):</label>
+    <select id="setContestantModeEnabled">
+      <option value="true">مفعّل — المتسابق يرى واجهة الإجابة والجرس فقط</option>
+      <option value="false">معطّل — عرض المنصة الكاملة للجميع</option>
+    </select>
+
     <div style="margin-top:16px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;">
       <button class="danger" onclick="fullResetAll()">🗑️ إعادة ضبط شاملة للنظام</button>
       <button class="primary" onclick="saveSettings()">💾 حفظ الإعدادات</button>
@@ -895,7 +901,7 @@
         <div style="font-weight:800; font-size:1.05rem;" id="cSchoolTitle">ثانوية الوليدية الإعدادية</div>
         <div style="font-size:0.8rem; color:var(--text-muted);">غرفة: <strong id="cPinBadge">----</strong> · <span id="cSyncStatus">🟢 متصل</span></div>
       </div>
-      <button onclick="exitContestantMode()" style="font-size:0.78rem; padding:5px 9px;">وضع المشرف</button>
+      <span class="pill" style="font-size:0.72rem;">واجهة المتسابق</span>
     </div>
 
     <div id="cTeamSelectBox">
@@ -961,7 +967,8 @@ function createDefaultState() {
     questionStartTime: null,
     buzzerLockedBy: null,
     responses: {},
-    certMembers: "تلاميذ وتلميذات ثانوية الوليدية الإعدادية"
+    certMembers: "تلاميذ وتلميذات ثانوية الوليدية الإعدادية",
+    contestantModeEnabled: true
   };
 }
 
@@ -2019,6 +2026,7 @@ function openSettingsModal() {
   document.getElementById("setTheme").value = state.theme || "";
   document.getElementById("setDomains").value = state.domains.join("، ");
   document.getElementById("setTeams").value = state.teams.map(t => t.name).join("، ");
+  document.getElementById("setContestantModeEnabled").value = (state.contestantModeEnabled !== false) ? "true" : "false";
   document.getElementById("settingsModal").classList.add("open");
 }
 
@@ -2070,6 +2078,7 @@ function saveSettings() {
     });
   }
 
+  state.contestantModeEnabled = (document.getElementById("setContestantModeEnabled").value === "true");
   saveState();
   renderAll();
   closeModal("settingsModal");
@@ -2368,7 +2377,8 @@ function detectContestantMode() {
   const params = new URLSearchParams(window.location.search);
   const joinPin = params.get("join");
   const role = params.get("role");
-  if (joinPin || role === "contestant") {
+  const enabledBySupervisor = (state.contestantModeEnabled !== false);
+  if ((joinPin || role === "contestant") && enabledBySupervisor) {
     isContestantView = true;
     const pin = joinPin || state.pin;
     const savedTeam = localStorage.getItem("oualidia_contestant_team_" + pin);
@@ -2376,17 +2386,21 @@ function detectContestantMode() {
     document.body.classList.add("contestant-mode");
     startRemoteSyncLoop(pin);
     renderContestantView();
+  } else {
+    exitContestantMode(false);
   }
 }
 
-function exitContestantMode() {
+function exitContestantMode(cleanUrl = false) {
   isContestantView = false;
   clearInterval(firebasePollTimer);
   document.body.classList.remove("contestant-mode");
-  const url = new URL(window.location.href);
-  url.searchParams.delete("join");
-  url.searchParams.delete("role");
-  window.history.replaceState({}, "", url.toString());
+  if (cleanUrl) {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("join");
+    url.searchParams.delete("role");
+    window.history.replaceState({}, "", url.toString());
+  }
   renderAll();
 }
 
@@ -2434,7 +2448,12 @@ function startRemoteSyncLoop(pin) {
               state.responses[contestantTeamId].answer = prevAns;
             }
             localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-            renderContestantView();
+            if (state.contestantModeEnabled === false) {
+              exitContestantMode(false);
+            } else {
+              if (!isContestantView) detectContestantMode();
+              else renderContestantView();
+            }
           }
         }
       } catch (e) {}
