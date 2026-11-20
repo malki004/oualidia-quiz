@@ -680,7 +680,7 @@
 
         <div id="firebaseConfigBox" style="display:none; margin-top:8px;">
           <label>رابط قاعدة بيانات Firebase (Database URL):</label>
-          <input type="text" id="firebaseUrlInput" placeholder="https://your-project-default-rtdb.firebaseio.com" onchange="saveFirebaseConfig()" />
+          <input type="text" id="firebaseUrlInput" dir="ltr" value="https://oualidia-quiz-b3d8b-default-rtdb.europe-west1.firebasedatabase.app/" title="https://oualidia-quiz-b3d8b-default-rtdb.europe-west1.firebasedatabase.app/" placeholder="https://oualidia-quiz-b3d8b-default-rtdb.europe-west1.firebasedatabase.app/" oninput="state.firebaseUrl = this.value.trim(); saveState();" onchange="saveFirebaseConfig()" />
           <small style="color:var(--text-muted);">يتيح ربط هواتف متعددة عبر الإنترنت أو 4G في اللحظة نفسها.</small>
         </div>
 
@@ -944,8 +944,8 @@ function createDefaultState() {
     theme: "theme-national",
     logoData: "",
     logoVisible: true,
-    syncMode: "local_bridge",
-    firebaseUrl: "",
+    syncMode: "firebase",
+    firebaseUrl: "https://oualidia-quiz-b3d8b-default-rtdb.europe-west1.firebasedatabase.app/",
     currentRound: 0,
     rounds: ["الجولة التمهيدية", "نصف النهائي", "النهائي"],
     qualifiedTeams: [],
@@ -1003,9 +1003,13 @@ function saveState(broadcast = true) {
   renderSim();
 }
 
+const DEFAULT_FIREBASE_URL = "https://oualidia-quiz-b3d8b-default-rtdb.europe-west1.firebasedatabase.app/";
+function getEffectiveFirebaseUrl() {
+  return (state.firebaseUrl && state.firebaseUrl.trim()) || DEFAULT_FIREBASE_URL;
+}
 async function syncToFirebase() {
-  if (!state.firebaseUrl) return;
-  const base = state.firebaseUrl.replace(/\/+$/, "");
+  if (!getEffectiveFirebaseUrl()) return;
+  const base = getEffectiveFirebaseUrl().replace(/\/+$/, "");
   try {
     await fetch(`${base}/quiz_rooms/${state.pin}.json`, {
       method: "PUT",
@@ -1883,7 +1887,7 @@ function renderQrModal() {
   }
   document.getElementById("syncModeSelect").value = state.syncMode;
   document.getElementById("firebaseConfigBox").style.display = state.syncMode === "firebase" ? "block" : "none";
-  document.getElementById("firebaseUrlInput").value = state.firebaseUrl || "";
+  document.getElementById("firebaseUrlInput").value = getEffectiveFirebaseUrl();
 
   RealQR.renderToCanvas(document.getElementById("qrCanvas"), payload);
 
@@ -2419,8 +2423,8 @@ function selectContestantTeam(teamId) {
 
 async function pushContestantUpdate(pin) {
   saveState(true);
-  if (state.firebaseUrl) {
-    const base = state.firebaseUrl.replace(/\/+$/, "");
+  if (getEffectiveFirebaseUrl()) {
+    const base = getEffectiveFirebaseUrl().replace(/\/+$/, "");
     try {
       await fetch(`${base}/quiz_rooms/${pin}.json`, {
         method: "PUT",
@@ -2435,8 +2439,8 @@ function startRemoteSyncLoop(pin) {
   clearInterval(firebasePollTimer);
   const poll = async () => {
     if (!isContestantView) return;
-    if (state.firebaseUrl) {
-      const base = state.firebaseUrl.replace(/\/+$/, "");
+    if (getEffectiveFirebaseUrl()) {
+      const base = getEffectiveFirebaseUrl().replace(/\/+$/, "");
       try {
         const res = await fetch(`${base}/quiz_rooms/${pin}.json`, { cache: "no-store" });
         if (res.ok) {
@@ -2469,7 +2473,7 @@ function renderContestantView() {
   const pin = getTargetRoomPin();
   document.getElementById("cSchoolTitle").textContent = state.school || "ثانوية الوليدية الإعدادية";
   document.getElementById("cPinBadge").textContent = pin;
-  document.getElementById("cSyncStatus").textContent = state.firebaseUrl ? "☁️ مزامنة مباشرة" : "📱 محلي / متصفح";
+  document.getElementById("cSyncStatus").textContent = getEffectiveFirebaseUrl() ? "☁️ مزامنة مباشرة" : "📱 محلي / متصفح";
 
   const sel = document.getElementById("cTeamSelect");
   if (!contestantTeamId && state.teams[0]) contestantTeamId = state.teams[0].id;
