@@ -2435,12 +2435,18 @@ function shuffleArray(arr) {
 }
 function fullResetAll() {
   if (!confirm("هل أنت متأكد من إعادة ضبط كافة البيانات والأسئلة والنتائج؟")) return;
+  const oldPin = state.pin;
+  const keptUrl = getEffectiveFirebaseUrl();
+  const keptBase = state.customBaseUrl || "";
   localStorage.removeItem(STORAGE_KEY);
   state = createDefaultState();
-  saveState();
+  state.pin = oldPin;
+  state.firebaseUrl = keptUrl;
+  state.customBaseUrl = keptBase;
+  saveState(true);
   renderAll();
   closeModal("settingsModal");
-  showToast("تمت إعادة الضبط الشاملة");
+  showToast("تمت إعادة الضبط الشاملة مع الحفاظ على رمز الغرفة الحالي");
 }
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
@@ -2808,6 +2814,11 @@ function startRemoteSyncLoop(pin) {
   clearInterval(firebasePollTimer);
   const poll = async () => {
     if (!isContestantView) return;
+    // Do not interrupt active typing on mobile inputs
+    const activeEl = document.activeElement;
+    if (activeEl && (activeEl.id === "cCustomTeamInput" || activeEl.id === "cOpenAnswerInput")) {
+      return;
+    }
     if (getEffectiveFirebaseUrl()) {
       const base = getEffectiveFirebaseUrl().replace(/\/+$/, "");
       try {
@@ -2815,24 +2826,27 @@ function startRemoteSyncLoop(pin) {
         if (res.ok) {
           const remote = await res.json();
           if (remote && typeof remote === "object") {
-            mergeRemoteState(remote);
-            if (state.contestantModeEnabled === false) {
+            const changed = mergeRemoteState(remote);
+            if (remote.contestantModeEnabled === false) {
               exitContestantMode(false);
-            } else {
-              if (!isContestantView) detectContestantMode();
-              else renderContestantView();
+            } else if (changed) {
+              renderContestantView();
             }
           }
         }
       } catch (e) {}
     }
   };
-  poll();
-  firebasePollTimer = setInterval(poll, 900);
+  renderContestantView();
+  firebasePollTimer = setInterval(poll, 1500);
 }
 
 function renderContestantView() {
   if (!isContestantView) return;
+  const activeEl = document.activeElement;
+  if (activeEl && (activeEl.id === "cCustomTeamInput" || activeEl.id === "cOpenAnswerInput")) {
+    return;
+  }
   document.body.className = "contestant-mode " + (state.theme || "");
   const pin = getTargetRoomPin();
   document.getElementById("cSchoolTitle").textContent = state.school || "ثانوية الوليدية الإعدادية";
