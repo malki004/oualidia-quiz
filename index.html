@@ -905,8 +905,11 @@
     </div>
 
     <div id="cTeamSelectBox">
-      <label style="margin-top:0;">اختر فريقك للانضمام:</label>
-      <select id="cTeamSelect" onchange="selectContestantTeam(this.value)"></select>
+      <label style="margin-top:0;">اكتب اسم فريقك بعد مسح QR:</label>
+      <div style="display:flex; gap:8px; margin-top:6px;">
+        <input type="text" id="cCustomTeamInput" placeholder="اكتب اسم فريقك هنا..." />
+        <button class="primary" type="button" onclick="registerContestantTeamName()" style="white-space:nowrap;">تأكيد الاسم</button>
+      </div>
       <div style="margin-top:10px; font-size:0.9rem; color:var(--accent-2); font-weight:700;" id="cTeamScoreBox"></div>
     </div>
 
@@ -996,7 +999,7 @@ function saveState(broadcast = true) {
   } catch (e) {}
   if (broadcast) {
     if (channel) channel.postMessage({ type: "STATE_UPDATE", state });
-    if (state.syncMode === "firebase" && state.firebaseUrl) {
+    if (getEffectiveFirebaseUrl() && (state.syncMode === "firebase" || !state.syncMode)) {
       syncToFirebase();
     }
   }
@@ -1102,7 +1105,11 @@ function renderTeams() {
     card.innerHTML = `
       <div class="team-header">
         <div class="team-name">${isBuzzed ? "🔔 " : ""}${escapeHtml(team.name)}</div>
-        <span class="rank-badge">#${rank} ${team.connected ? "🟢" : "⚪"}</span>
+        <div style="display:flex; align-items:center; gap:4px;">
+          <button type="button" onclick="quickRenameTeam('${team.id}')" title="تعديل اسم الفريق" style="padding:2px 6px; font-size:0.72rem;">✏️</button>
+          <button type="button" onclick="quickDeleteTeam('${team.id}')" title="حذف الفريق" style="padding:2px 6px; font-size:0.72rem;">🗑️</button>
+          <span class="rank-badge">#${rank} ${team.connected ? "🟢" : "⚪"}</span>
+        </div>
       </div>
       <div class="team-score">${team.score} <span style="font-size:0.85rem; font-weight:500;">نقطة</span></div>
       <div class="team-meta">${escapeHtml(team.lastFeedback || (state.qualifiedTeams.includes(team.id) ? "⭐ متأهل للجولة التالية" : "جاهز للمنافسة"))}</div>
@@ -1158,6 +1165,46 @@ function renderDomains() {
     `;
     grid.appendChild(card);
   });
+}
+
+function quickRenameTeam(teamId) {
+  const team = state.teams.find(t => t.id === teamId);
+  if (!team) return;
+  const proposed = prompt("اكتب الاسم الجديد للفريق:", team.name);
+  if (proposed === null) return;
+  const cleaned = proposed.trim().replace(/\s+/g, " ");
+  if (!cleaned) {
+    showToast("لا يمكن أن يكون اسم الفريق فارغاً");
+    return;
+  }
+  if (isDuplicateTeamName(cleaned, team.id)) {
+    showToast("هذا الاسم مستعمل بالفعل من طرف فريق آخر");
+    return;
+  }
+  team.name = cleaned;
+  team.lastFeedback = "تم تحديث الاسم إلى: " + cleaned;
+  saveState();
+  renderAll();
+  showToast("تم تعديل اسم الفريق بنجاح");
+}
+
+function quickDeleteTeam(teamId) {
+  const team = state.teams.find(t => t.id === teamId);
+  if (!team) return;
+  if (!confirm(`هل تريد حذف الفريق «${team.name}» من القائمة؟`)) return;
+  state.teams = state.teams.filter(t => t.id !== teamId);
+  if (state.responses && state.responses[teamId]) {
+    delete state.responses[teamId];
+  }
+  if (state.buzzerLockedBy === teamId) {
+    state.buzzerLockedBy = null;
+  }
+  if (simTeamId === teamId) {
+    simTeamId = state.teams[0] ? state.teams[0].id : null;
+  }
+  saveState();
+  renderAll();
+  showToast("تم حذف الفريق");
 }
 
 function adjustScore(teamId, delta, domainName = null) {
@@ -1284,6 +1331,17 @@ function renderStageLive() {
   const chipsWrap = document.getElementById("liveResponsesChips");
   chipsWrap.innerHTML = "";
 
+  if (q.type === "buzzer" && state.buzzerLockedBy) {
+    const buzTeam = state.teams.find(t => t.id === state.buzzerLockedBy);
+    const buzResp = state.responses?.[state.buzzerLockedBy] || {};
+    if (buzTeam) {
+      const banner = document.createElement("div");
+      banner.style.cssText = "width:100%; padding:10px 12px; border-radius:10px; background:rgba(239,68,68,0.18); border:1px solid #ef4444; font-weight:700; margin-bottom:6px;";
+      banner.textContent = `🔔 الأسرع على الجرس: ${buzTeam.name} (${buzResp.timeSec ?? "?"} ثانية)`;
+      chipsWrap.appendChild(banner);
+    }
+  }
+
   state.teams.forEach(t => {
     const r = state.responses[t.id] || {};
     const isBuzzed = state.buzzerLockedBy === t.id;
@@ -1323,8 +1381,13 @@ function autoGradeQcm() {
   state.teams.forEach(t => {
     const r = state.responses[t.id];
     if (!r || r.graded) return;
+    const submitted = (r.answer || "").trim();
+    if (!submitted) {
+      r.graded = true;
+      return;
+    }
     r.graded = true;
-    const isCorrect = r.answer && r.answer.trim() === (q.answer || "").trim();
+    const isCorrect = submitted === (q.answer || "").trim();
     if (isCorrect) {
       const bonus = (t.id === fastestTeamId) ? 1 : 0;
       adjustScore(t.id, q.points + bonus, q.domain);
@@ -1367,6 +1430,10 @@ function markQuestionDone() {
 }
 
 function closeStageModal() {
+  const hasPendingActivity = Boolean(state.buzzerLockedBy) || Object.values(state.responses || {}).some(r => r && r.answer && !r.graded);
+  if (hasPendingActivity && !confirm("توجد إجابات أو ضغطة جرس على هذا السؤال؛ هل تريد إغلاق نافذة السؤال الآن؟")) {
+    return;
+  }
   stopTimer();
   state.questionOpen = false;
   state.activeQuestionId = null;
@@ -2069,7 +2136,17 @@ function saveSettings() {
   const doms = document.getElementById("setDomains").value.split(/[,،]/).map(s => s.trim()).filter(Boolean);
   if (doms.length) state.domains = doms;
 
-  const teamNames = document.getElementById("setTeams").value.split(/[,،]/).map(s => s.trim()).filter(Boolean);
+  const rawTeamNames = document.getElementById("setTeams").value.split(/[,،]/).map(s => s.trim().replace(/\s+/g, " ")).filter(Boolean);
+  const seenNames = new Set();
+  const teamNames = rawTeamNames.filter(name => {
+    const key = normalizeTeamName(name);
+    if (seenNames.has(key)) return false;
+    seenNames.add(key);
+    return true;
+  });
+  if (rawTeamNames.length !== teamNames.length) {
+    showToast("تمت إزالة الأسماء المكررة تلقائياً للحفاظ على تفرد أسماء الفرق");
+  }
   if (teamNames.length) {
     state.teams = teamNames.map((name, i) => {
       const existing = state.teams[i];
@@ -2385,8 +2462,8 @@ function detectContestantMode() {
   if ((joinPin || role === "contestant") && enabledBySupervisor) {
     isContestantView = true;
     const pin = joinPin || state.pin;
-    const savedTeam = localStorage.getItem("oualidia_contestant_team_" + pin);
-    contestantTeamId = savedTeam || (state.teams[0] && state.teams[0].id) || null;
+    const savedTeam = localStorage.getItem("oualidia_qr_registered_team_" + pin) || localStorage.getItem("oualidia_contestant_team_" + pin);
+    contestantTeamId = savedTeam || null;
     document.body.classList.add("contestant-mode");
     startRemoteSyncLoop(pin);
     renderContestantView();
@@ -2416,13 +2493,124 @@ function selectContestantTeam(teamId) {
   if (t) {
     t.connected = true;
     t.lastFeedback = "انضم عبر الهاتف";
+    const inp = document.getElementById("cCustomTeamInput");
+    if (inp && document.activeElement !== inp) inp.value = t.name;
     pushContestantUpdate(pin);
   }
   renderContestantView();
 }
 
+function normalizeTeamName(name) {
+  return String(name || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/[إأآا]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه")
+    .toLowerCase();
+}
+
+function isDuplicateTeamName(candidateName, excludeTeamId = null) {
+  const normCandidate = normalizeTeamName(candidateName);
+  if (!normCandidate) return false;
+  return (state.teams || []).some(t => {
+    if (excludeTeamId && t.id === excludeTeamId) return false;
+    return normalizeTeamName(t.name) === normCandidate;
+  });
+}
+
+function registerContestantTeamName() {
+  const inp = document.getElementById("cCustomTeamInput");
+  const newName = (inp?.value || "").trim().replace(/\s+/g, " ");
+  if (!newName) {
+    showToast("يرجى كتابة اسم الفريق أولاً");
+    return;
+  }
+  const pin = getTargetRoomPin();
+  const deviceTeamKey = "oualidia_qr_registered_team_" + pin;
+  const myRegisteredId = localStorage.getItem(deviceTeamKey);
+  let team = myRegisteredId ? state.teams.find(item => item.id === myRegisteredId) : null;
+
+  if (isDuplicateTeamName(newName, team ? team.id : null)) {
+    showToast("هذا الاسم مستعمل بالفعل من طرف فريق آخر، يرجى اختيار اسم مختلف");
+    if (inp) {
+      inp.focus();
+      inp.select();
+    }
+    return;
+  }
+
+  if (team) {
+    team.name = newName;
+    team.connected = true;
+    team.lastFeedback = "متصل باسم: " + newName;
+    contestantTeamId = team.id;
+  } else {
+    const newId = "t_qr_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+    team = {
+      id: newId,
+      name: newName,
+      score: 0,
+      roundScores: [0, 0, 0],
+      domainHits: {},
+      jokers: { double: false, fifty: false, audience: false },
+      armedDouble: false,
+      connected: true,
+      lastFeedback: "انضم عبر QR"
+    };
+    state.teams.push(team);
+    contestantTeamId = newId;
+  }
+
+  if (!state.responses) state.responses = {};
+  if (!state.responses[team.id]) {
+    const q = state.questions.find(item => item.id === state.activeQuestionId);
+    state.responses[team.id] = {
+      answer: "",
+      shuffledOptions: q && q.type === "qcm" ? shuffleArray([...q.options]) : [],
+      timeSec: null,
+      graded: false
+    };
+  }
+
+  localStorage.setItem(deviceTeamKey, contestantTeamId);
+  localStorage.setItem("oualidia_contestant_team_" + pin, contestantTeamId);
+  pushContestantUpdate(pin);
+  renderContestantView();
+  showToast("تم تسجيل اسم الفريق وعرضه على الشاشة الرئيسية");
+}
+
+function mergeRemoteState(remote) {
+  if (!remote || typeof remote !== "object") return false;
+  const localSig = JSON.stringify({
+    activeQuestionId: state.activeQuestionId,
+    questionOpen: state.questionOpen,
+    buzzerLockedBy: state.buzzerLockedBy,
+    responses: state.responses,
+    teams: state.teams.map(t => ({ id: t.id, name: t.name, score: t.score, connected: t.connected, lastFeedback: t.lastFeedback }))
+  });
+  const remoteSig = JSON.stringify({
+    activeQuestionId: remote.activeQuestionId,
+    questionOpen: remote.questionOpen,
+    buzzerLockedBy: remote.buzzerLockedBy,
+    responses: remote.responses,
+    teams: (remote.teams || []).map(t => ({ id: t.id, name: t.name, score: t.score, connected: t.connected, lastFeedback: t.lastFeedback }))
+  });
+
+  const prevAns = contestantTeamId ? state.responses?.[contestantTeamId]?.answer : null;
+  state = { ...state, ...remote };
+  if (contestantTeamId && prevAns && state.responses?.[contestantTeamId] && !state.responses[contestantTeamId].answer) {
+    state.responses[contestantTeamId].answer = prevAns;
+  }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  return localSig !== remoteSig;
+}
+
 async function pushContestantUpdate(pin) {
-  saveState(true);
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {}
+  if (channel) channel.postMessage({ type: "STATE_UPDATE", state });
   if (getEffectiveFirebaseUrl()) {
     const base = getEffectiveFirebaseUrl().replace(/\/+$/, "");
     try {
@@ -2433,6 +2621,29 @@ async function pushContestantUpdate(pin) {
       });
     } catch (e) {}
   }
+}
+
+let supervisorPollTimer = null;
+function startSupervisorSyncLoop() {
+  clearInterval(supervisorPollTimer);
+  const pollSup = async () => {
+    if (isContestantView || !getEffectiveFirebaseUrl()) return;
+    const base = getEffectiveFirebaseUrl().replace(/\/+$/, "");
+    try {
+      const res = await fetch(`${base}/quiz_rooms/${state.pin}.json`, { cache: "no-store" });
+      if (res.ok) {
+        const remote = await res.json();
+        if (remote && typeof remote === "object") {
+          const changed = mergeRemoteState(remote);
+          if (changed) {
+            renderAll();
+            renderSim();
+          }
+        }
+      }
+    } catch (e) {}
+  };
+  supervisorPollTimer = setInterval(pollSup, 1200);
 }
 
 function startRemoteSyncLoop(pin) {
@@ -2446,12 +2657,7 @@ function startRemoteSyncLoop(pin) {
         if (res.ok) {
           const remote = await res.json();
           if (remote && typeof remote === "object") {
-            const prevAns = state.responses?.[contestantTeamId]?.answer;
-            state = { ...state, ...remote };
-            if (prevAns && state.responses?.[contestantTeamId] && !state.responses[contestantTeamId].answer) {
-              state.responses[contestantTeamId].answer = prevAns;
-            }
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            mergeRemoteState(remote);
             if (state.contestantModeEnabled === false) {
               exitContestantMode(false);
             } else {
@@ -2475,14 +2681,17 @@ function renderContestantView() {
   document.getElementById("cPinBadge").textContent = pin;
   document.getElementById("cSyncStatus").textContent = getEffectiveFirebaseUrl() ? "☁️ مزامنة مباشرة" : "📱 محلي / متصفح";
 
-  const sel = document.getElementById("cTeamSelect");
-  if (!contestantTeamId && state.teams[0]) contestantTeamId = state.teams[0].id;
-  sel.innerHTML = state.teams.map(t =>
-    `<option value="${t.id}" ${t.id === contestantTeamId ? "selected" : ""}>${escapeHtml(t.name)}</option>`
-  ).join("");
+  const myRegId = localStorage.getItem("oualidia_qr_registered_team_" + pin) || contestantTeamId;
+  const team = myRegId ? state.teams.find(t => t.id === myRegId) : null;
+  if (team) contestantTeamId = team.id;
 
-  const team = state.teams.find(t => t.id === contestantTeamId) || state.teams[0];
-  document.getElementById("cTeamScoreBox").textContent = team ? `رصيد فريقك الحالي: ${team.score} نقطة` : "";
+  const customInp = document.getElementById("cCustomTeamInput");
+  if (customInp && team && document.activeElement !== customInp && !customInp.value) {
+    customInp.value = team.name;
+  }
+  document.getElementById("cTeamScoreBox").textContent = team
+    ? `فريقك المسجل: ${team.name} · الرصيد الحالي: ${team.score} نقطة`
+    : "يرجى كتابة اسم فريقك أعلاه والضغط على تأكيد الاسم";
 
   const stage = document.getElementById("cStageArea");
   const q = state.questions.find(item => item.id === state.activeQuestionId);
@@ -2588,6 +2797,7 @@ if (channel) {
 
 renderAll();
 detectContestantMode();
+startSupervisorSyncLoop();
 </script>
 </body>
 </html>
