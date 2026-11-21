@@ -600,7 +600,6 @@
     <button onclick="openStatsModal()">📊 التقرير والإكسل</button>
     <button onclick="openQuestionEditor()">➕ إضافة سؤال</button>
     <button onclick="openImportExportModal()">📥 استيراد / تصدير</button>
-    <button id="undoScoreBtn" onclick="undoLastScoreChange()" disabled title="التراجع عن آخر تعديل للنقاط">↩️ تراجع النقاط</button>
     <button onclick="openSettingsModal()">⚙️ الإعدادات والشعار</button>
     <button onclick="toggleFullscreen()">⛶ ملء الشاشة</button>
     <button class="warn" onclick="openPodiumModal()">🏅 التتويج والشهادة</button>
@@ -618,19 +617,6 @@
   </div>
 
   <div class="teams-grid" id="teamsGrid"></div>
-  <div style="display:flex; flex-wrap:wrap; gap:10px; justify-content:space-between; align-items:center; background:var(--bg-card); padding:10px 14px; border-radius:12px; border:1px solid var(--border); margin-bottom:14px;">
-    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-      <strong style="font-size:0.9rem;">📚 تصفية المحاور والأسئلة:</strong>
-      <select id="domainFilterSelect" onchange="state.domainFilter = this.value; renderDomains();" style="width:auto; min-width:190px; padding:6px 10px; font-size:0.84rem;">
-        <option value="__ALL__">كل المحاور</option>
-      </select>
-      <label style="display:inline-flex; align-items:center; gap:6px; margin:0; font-size:0.84rem; color:var(--text-main); cursor:pointer;">
-        <input type="checkbox" id="hideDoneQuestionsChk" onchange="state.hideDoneQuestions = this.checked; renderDomains();" style="width:auto; margin:0;" />
-        إخفاء الأسئلة المنجزة
-      </label>
-    </div>
-    <input type="search" id="questionSearchInput" oninput="state.questionSearch = this.value; renderDomains();" placeholder="🔍 ابحث في نص السؤال أو الإجابة..." style="width:auto; min-width:230px; padding:6px 10px; font-size:0.84rem;" />
-  </div>
   <div class="domains-grid" id="domainsGrid"></div>
 </div>
 
@@ -689,10 +675,7 @@
     </div>
 
     <div style="margin-top:16px; display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <button onclick="markQuestionDone()">✓ اعتبار السؤال منجزاً والعودة</button>
-        <button class="success" onclick="openNextUnfinishedQuestion()">⏭️ السؤال التالي غير المنجز</button>
-      </div>
+      <button onclick="markQuestionDone()">✓ اعتبار السؤال منجزاً والعودة</button>
       <button class="primary" onclick="closeStageModal()">حفظ وإغلاق النافذة</button>
     </div>
   </div>
@@ -1160,10 +1143,6 @@ function renderAll() {
     defEl.style.display = "flex";
   }
 
-  const undoBtn = document.getElementById("undoScoreBtn");
-  if (undoBtn) {
-    undoBtn.disabled = !Array.isArray(scoreHistoryStack) || scoreHistoryStack.length === 0;
-  }
   renderRounds();
   renderTeams();
   renderDomains();
@@ -1226,48 +1205,14 @@ function renderTeams() {
     `;
     grid.appendChild(card);
   });
-  if (!state.teams.length) {
-    grid.innerHTML = `<div style="grid-column:1/-1; background:var(--bg-card); border:1px dashed var(--border); border-radius:14px; padding:18px; text-align:center; color:var(--text-muted);">
-      لا توجد فرق مسجلة حالياً — يمكنك إضافة فرق من <strong>الإعدادات</strong> أو عبر انضمام الفرق بواسطة رمز <strong>QR</strong>.
-    </div>`;
-  }
 }
 
 function renderDomains() {
   const grid = document.getElementById("domainsGrid");
-  if (!grid) return;
   grid.innerHTML = "";
 
-  const filterSel = document.getElementById("domainFilterSelect");
-  const currentFilter = state.domainFilter || "__ALL__";
-  if (filterSel) {
-    filterSel.innerHTML = `<option value="__ALL__">كل المحاور (${state.questions.length})</option>` +
-      state.domains.map(d => {
-        const cnt = state.questions.filter(q => q.domain === d).length;
-        return `<option value="${escapeHtml(d)}" ${currentFilter === d ? "selected" : ""}>${escapeHtml(d)} (${cnt})</option>`;
-      }).join("");
-  }
-
-  const hideDoneChk = document.getElementById("hideDoneQuestionsChk");
-  if (hideDoneChk) hideDoneChk.checked = Boolean(state.hideDoneQuestions);
-
-  const searchInp = document.getElementById("questionSearchInput");
-  const qTerm = normalizeAnswerText(state.questionSearch || "");
-  if (searchInp && document.activeElement !== searchInp && (state.questionSearch || "") !== searchInp.value) {
-    searchInp.value = state.questionSearch || "";
-  }
-
-  const visibleDomains = currentFilter === "__ALL__" ? state.domains : state.domains.filter(d => d === currentFilter);
-
-  visibleDomains.forEach((dom) => {
-    const allDomQs = state.questions.filter(q => q.domain === dom);
-    const qs = allDomQs.filter(q => {
-      if (state.hideDoneQuestions && q.done) return false;
-      if (!qTerm) return true;
-      const hay = normalizeAnswerText(`${q.text || ""} ${q.answer || ""} ${(q.options || []).join(" ")}`);
-      return hay.includes(qTerm);
-    });
-
+  state.domains.forEach((dom) => {
+    const qs = state.questions.filter(q => q.domain === dom);
     const card = document.createElement("div");
     card.className = "domain-card";
     const typeLabel = (t) => t === "qcm" ? "QCM" : t === "buzzer" ? "🔔 جرس" : "✍️ مكتوب";
@@ -1275,15 +1220,13 @@ function renderDomains() {
     card.innerHTML = `
       <div class="domain-title">
         <span>${escapeHtml(dom)}</span>
-        <span class="pill">${qs.length} / ${allDomQs.length} أسئلة</span>
+        <span class="pill">${qs.length} أسئلة</span>
       </div>
       <div class="q-list">
-        ${qs.map((q) => {
-          const origIdx = allDomQs.findIndex(item => item.id === q.id);
-          return `
+        ${qs.map((q, i) => `
           <div class="q-item ${q.done ? "done" : ""}">
             <div style="flex:1;">
-              <div class="q-text"><strong>${origIdx + 1}.</strong> ${escapeHtml(sanitizeExcelCell(q.text))}</div>
+              <div class="q-text"><strong>${i + 1}.</strong> ${escapeHtml(sanitizeExcelCell(q.text))}</div>
               <div class="q-badges">
                 <span class="pill">${typeLabel(q.type)}</span>
                 <span class="pill">${q.points} ن</span>
@@ -1294,43 +1237,13 @@ function renderDomains() {
             <div style="display:flex; flex-direction:column; gap:5px;">
               <button class="primary" onclick="openQuestionStage('${q.id}')">عرض</button>
               <button onclick="openQuestionEditor('${q.id}')" style="padding:4px 8px; font-size:0.75rem;">تعديل</button>
-              <button onclick="deleteQuestionItem('${q.id}')" style="padding:4px 8px; font-size:0.75rem;" title="حذف السؤال">🗑️</button>
             </div>
           </div>
-        `;}).join("") || '<div style="color:var(--text-muted); font-size:0.85rem;">لا توجد أسئلة مطابقة للبحث أو التصفية.</div>'}
+        `).join("") || '<div style="color:var(--text-muted); font-size:0.85rem;">لا توجد أسئلة في هذا المحور بعد.</div>'}
       </div>
     `;
     grid.appendChild(card);
   });
-}
-
-function deleteQuestionItem(qId) {
-  const q = state.questions.find(item => item.id === qId);
-  if (!q) return;
-  if (!confirm(`هل تريد حذف السؤال: «${q.text}»؟`)) return;
-  state.questions = state.questions.filter(item => item.id !== qId);
-  if (state.activeQuestionId === qId) {
-    state.activeQuestionId = null;
-    state.questionOpen = false;
-  }
-  saveState();
-  renderDomains();
-  showToast("تم حذف السؤال");
-}
-
-function openNextUnfinishedQuestion() {
-  const curIdx = state.questions.findIndex(item => item.id === state.activeQuestionId);
-  const ordered = curIdx >= 0
-    ? [...state.questions.slice(curIdx + 1), ...state.questions.slice(0, curIdx)]
-    : state.questions;
-  const nextQ = ordered.find(item => !item.done);
-  if (!nextQ) {
-    showToast("جميع الأسئلة منجزة بالفعل ✓");
-    return;
-  }
-  stopTimer();
-  state.questionOpen = false;
-  openQuestionStage(nextQ.id);
 }
 
 function quickRenameTeam(teamId) {
@@ -1402,38 +1315,11 @@ function markQuestionPointsAwarded(teamId, questionId) {
   }
 }
 
-const scoreHistoryStack = [];
-function pushScoreSnapshot(label = "تعديل نقاط") {
-  scoreHistoryStack.push({
-    label,
-    teams: JSON.parse(JSON.stringify(state.teams || [])),
-    awardedQuestionTeams: JSON.parse(JSON.stringify(state.awardedQuestionTeams || {}))
-  });
-  if (scoreHistoryStack.length > 30) scoreHistoryStack.shift();
-}
-
-function undoLastScoreChange() {
-  if (!scoreHistoryStack.length) {
-    showToast("لا توجد خطوات سابقة للتراجع عنها");
-    return;
-  }
-  const snap = scoreHistoryStack.pop();
-  state.teams = snap.teams;
-  state.awardedQuestionTeams = snap.awardedQuestionTeams;
-  saveState(true);
-  renderAll();
-  if (document.getElementById("stageModal")?.classList.contains("open")) {
-    renderStageLive();
-  }
-  showToast(`تم التراجع عن: ${snap.label}`);
-}
-
 function awardQuestionPointsToTeam(teamId, questionId = null) {
   const qId = questionId || state.activeQuestionId;
   const q = state.questions.find(item => item.id === qId);
   const team = state.teams.find(t => t.id === teamId);
   if (!q || !team) return false;
-  pushScoreSnapshot(`منح نقاط لـ ${team.name}`);
 
   if (hasQuestionPointsAwarded(team.id, q.id)) {
     showToast(`تم منح نقاط هذا السؤال مسبقاً لـ ${team.name}`);
@@ -1442,20 +1328,13 @@ function awardQuestionPointsToTeam(teamId, questionId = null) {
 
   const basePts = Number(q.points) || 0;
   let awardedPts = basePts;
-  if (team.armedDouble) {
-    if (awardedPts > 0) {
-      awardedPts = basePts * 2;
-    }
+  if (awardedPts > 0 && team.armedDouble) {
+    awardedPts = basePts * 2;
     team.armedDouble = false;
     team.jokers.double = true;
   }
 
-  const rIdx = Math.max(0, Number(state.currentRound) || 0);
-  if (!Array.isArray(team.roundScores)) team.roundScores = [];
-  while (team.roundScores.length <= rIdx) team.roundScores.push(0);
-
   team.score = Math.max(0, (Number(team.score) || 0) + awardedPts);
-  team.roundScores[rIdx] = Math.max(0, (Number(team.roundScores[rIdx]) || 0) + awardedPts);
   if (awardedPts > 0 && q.domain) {
     if (!team.domainHits || typeof team.domainHits !== "object") team.domainHits = {};
     team.domainHits[q.domain] = (Number(team.domainHits[q.domain]) || 0) + 1;
@@ -1496,14 +1375,9 @@ function awardPointsToAllTeams() {
 function adjustScore(teamId, delta, domainName = null, shouldRender = true) {
   const team = state.teams.find(t => t.id === teamId);
   if (!team) return;
-  pushScoreSnapshot(`تعديل نقاط ${team.name}`);
   const currentScore = Number(team.score) || 0;
   const actualDelta = Number(delta) || 0;
-  const rIdx = Math.max(0, Number(state.currentRound) || 0);
-  if (!Array.isArray(team.roundScores)) team.roundScores = [];
-  while (team.roundScores.length <= rIdx) team.roundScores.push(0);
   team.score = Math.max(0, currentScore + actualDelta);
-  team.roundScores[rIdx] = Math.max(0, (Number(team.roundScores[rIdx]) || 0) + actualDelta);
   if (actualDelta > 0 && domainName) {
     if (!team.domainHits || typeof team.domainHits !== "object") team.domainHits = {};
     team.domainHits[domainName] = (Number(team.domainHits[domainName]) || 0) + 1;
@@ -1527,11 +1401,27 @@ function toggleDoubleJoker(teamId) {
 
 function useFiftyJoker(teamId) {
   const team = state.teams.find(t => t.id === teamId);
-  if (!team || team.jokers.fifty) return;
+  if (!team || team.jokers?.fifty) return;
+  if (!team.jokers) team.jokers = {};
   team.jokers.fifty = true;
+  const q = state.questions.find(item => item.id === state.activeQuestionId);
+  if (q && q.type === "qcm" && Array.isArray(q.options) && q.options.length > 2) {
+    const correctNorm = normalizeAnswerText(q.answer);
+    const wrongOpts = q.options.filter(opt => normalizeAnswerText(opt) !== correctNorm);
+    const eliminated = wrongOpts.slice(0, Math.max(0, wrongOpts.length - 1));
+    state.eliminatedQcmOptions = eliminated;
+    document.querySelectorAll("#stageQcmGrid .qcm-opt").forEach(el => {
+      if (eliminated.includes(el.dataset.opt)) {
+        el.style.opacity = "0.3";
+        el.style.textDecoration = "line-through";
+      }
+    });
+  }
   showToast(`${team.name} استخدم بطاقة حذف إجابتين (50/50)`);
   saveState();
   renderTeams();
+  renderSim();
+  if (isContestantView) renderContestantView();
 }
 
 function useAudienceJoker(teamId) {
@@ -1554,9 +1444,7 @@ function openQuestionStage(qId) {
   state.timeExpired = false;
   state.openAnswersRevealed = false;
   state.questionStartTime = Date.now();
-  window._localBuzzLock = null;
   state.buzzerLockedBy = null;
-  state.buzzerPressedAt = null;
   state.responses = {};
 
   state.teams.forEach(t => {
@@ -1776,9 +1664,7 @@ async function autoGradeQcm() {
 }
 
 function reopenBuzzer() {
-  window._localBuzzLock = null;
   state.buzzerLockedBy = null;
-  state.buzzerPressedAt = null;
   saveState();
   renderAll();
   renderStageLive();
@@ -2591,32 +2477,21 @@ function addRound() {
 }
 
 function advanceTopTeams() {
-  if (!state.teams || !state.teams.length) {
-    showToast("لا توجد فرق لتصعيدها");
-    return;
-  }
   const sorted = [...state.teams].sort((a, b) => b.score - a.score);
-  const cutoffScore = sorted.length >= 2 ? sorted[1].score : sorted[0].score;
-  const qualified = sorted.filter((t, idx) => idx < 2 || t.score === cutoffScore).map(t => t.id);
-  const hasTieAtCutoff = sorted.length > 2 && sorted[1].score === sorted[2].score;
-  state.qualifiedTeams = qualified;
+  const topTwo = sorted.slice(0, 2).map(t => t.id);
+  state.qualifiedTeams = topTwo;
   if (state.currentRound < state.rounds.length - 1) state.currentRound++;
   saveState();
   renderAll();
-  showToast(hasTieAtCutoff
-    ? `تم تصعيد ${qualified.length} فرق (بسبب تعادل النقاط على الحد الفاصل)`
-    : "تم تصعيد المتصدرين إلى الجولة التالية");
+  showToast("تم تصعيد المتصدرين إلى الجولة التالية");
 }
 
 function resetCurrentRoundScores() {
-  const rIdx = Math.max(0, Number(state.currentRound) || 0);
+  if (!confirm("هل تريد تصفير نقاط الفرق الحالية؟")) return;
   state.teams.forEach(t => {
-    if (Array.isArray(t.roundScores) && rIdx < t.roundScores.length) {
-      const prevRoundPts = Number(t.roundScores[rIdx]) || 0;
-      t.score = Math.max(0, (Number(t.score) || 0) - prevRoundPts);
-      t.roundScores[rIdx] = 0;
-    } else {
-      t.score = 0;
+    t.score = 0;
+    if (Array.isArray(t.roundScores)) {
+      t.roundScores[state.currentRound] = 0;
     }
     t.domainHits = {};
     t.lastFeedback = "";
@@ -2624,7 +2499,7 @@ function resetCurrentRoundScores() {
   state.awardedQuestionTeams = {};
   saveState();
   renderAll();
-  showToast("تم تصفير نقاط الجولة الحالية");
+  showToast("تم تصفير النقاط");
 }
 
 function openLeaderboard() {
@@ -2655,14 +2530,11 @@ function openImportExportModal() {
 
 function downloadFile(filename, content, mime = "application/octet-stream") {
   const blob = new Blob([content], { type: mime });
-  const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url;
+  a.href = URL.createObjectURL(blob);
   a.download = filename;
-  document.body.appendChild(a);
   a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1500);
+  URL.revokeObjectURL(a.href);
 }
 
 function exportQuestionsExcel() {
@@ -2716,18 +2588,7 @@ function handleImportFile(input) {
       try {
         const parsed = JSON.parse(txt);
         if (Array.isArray(parsed.questions)) {
-          const keepPin = state.pin;
-          const keepFbUrl = state.firebaseUrl;
-          const keepSyncMode = state.syncMode;
-          const keepBaseUrl = state.customBaseUrl;
-          state = {
-            ...state,
-            ...parsed,
-            pin: keepPin,
-            firebaseUrl: parsed.firebaseUrl || keepFbUrl,
-            syncMode: parsed.syncMode || keepSyncMode,
-            customBaseUrl: parsed.customBaseUrl !== undefined ? parsed.customBaseUrl : keepBaseUrl
-          };
+          state = { ...state, ...parsed };
           saveState();
           renderAll();
           closeModal("ioModal");
@@ -2760,33 +2621,9 @@ function importPastedRows(replaceExisting) {
   const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const imported = [];
 
-  function parseDelimitedLine(rowStr, sep) {
-    const out = [];
-    let cur = "";
-    let inQuotes = false;
-    for (let i = 0; i < rowStr.length; i++) {
-      const ch = rowStr[i];
-      if (ch === "\"") {
-        if (inQuotes && rowStr[i + 1] === "\"") {
-          cur += "\"";
-          i++;
-        } else {
-          inQuotes = !inQuotes;
-        }
-      } else if (ch === sep && !inQuotes) {
-        out.push(cur.trim());
-        cur = "";
-      } else {
-        cur += ch;
-      }
-    }
-    out.push(cur.trim());
-    return out;
-  }
-
   lines.forEach((line, idx) => {
     const sep = line.includes("\t") ? "\t" : (line.includes(";") ? ";" : ",");
-    const cols = parseDelimitedLine(line, sep);
+    const cols = line.split(sep).map(c => c.trim());
     if (idx === 0 && (cols[0] === "المحور" || cols[2] === "السؤال")) return;
     if (!cols[2]) return;
 
@@ -2821,7 +2658,7 @@ function openStatsModal() {
   const rows = sorted.map((t, i) => `
     <tr>
       <td>${i + 1}</td>
-      <td>${escapeHtml(sanitizeExcelCell(t.name))}</td>
+      <td>${escapeHtml(t.name)}</td>
       ${state.domains.map(d => `<td>${t.domainHits?.[d] || 0}</td>`).join("")}
       <td><strong>${t.score}</strong></td>
     </tr>
@@ -2841,7 +2678,7 @@ function exportResultsExcel() {
   const rows = sorted.map((t, i) => `
     <tr>
       <td>${i + 1}</td>
-      <td>${escapeHtml(sanitizeExcelCell(t.name))}</td>
+      <td>${escapeHtml(t.name)}</td>
       ${state.domains.map(d => `<td>${t.domainHits?.[d] || 0}</td>`).join("")}
       <td>${t.score}</td>
     </tr>
@@ -2883,19 +2720,8 @@ function renderCertificate() {
 function openModal(id) { document.getElementById(id).classList.add("open"); }
 function closeModal(id) { document.getElementById(id).classList.remove("open"); }
 function toggleFullscreen() {
-  try {
-    if (!document.fullscreenElement) {
-      const p = document.documentElement.requestFullscreen?.();
-      if (p && typeof p.catch === "function") {
-        p.catch(() => showToast("تعذر تفعيل وضع ملء الشاشة في هذا الإطار"));
-      }
-    } else {
-      const p = document.exitFullscreen?.();
-      if (p && typeof p.catch === "function") p.catch(() => {});
-    }
-  } catch (e) {
-    showToast("تعذر تبديل وضع ملء الشاشة");
-  }
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+  else document.exitFullscreen?.();
 }
 function printSection(id) {
   window.print();
@@ -2909,6 +2735,7 @@ function shuffleArray(arr) {
 }
 function fullResetAll() {
   if (!confirm("هل أنت متأكد من إعادة ضبط كافة البيانات والأسئلة والنتائج؟")) return;
+  stopTimer();
   const oldPin = state.pin;
   const keptUrl = getEffectiveFirebaseUrl();
   const keptBase = state.customBaseUrl || "";
@@ -3380,13 +3207,10 @@ async function pushContestantUpdate(pin) {
 }
 
 let supervisorPollTimer = null;
-let supervisorPollBusy = false;
 function startSupervisorSyncLoop() {
   clearInterval(supervisorPollTimer);
   const pollSup = async () => {
-    if (isContestantView || !getEffectiveFirebaseUrl() || supervisorPollBusy) return;
-    supervisorPollBusy = true;
-    try {
+    if (isContestantView || !getEffectiveFirebaseUrl()) return;
     const base = getEffectiveFirebaseUrl().replace(/\/+$/, "");
     try {
       const actRes = await fetch(`${base}/quiz_rooms/${state.pin}/actions.json`, { cache: "no-store" });
@@ -3419,18 +3243,14 @@ function startSupervisorSyncLoop() {
         }
       }
     } catch (e) {}
-    finally { supervisorPollBusy = false; }
   };
   supervisorPollTimer = setInterval(pollSup, 150);
 }
 
-let remotePollBusy = false;
 function startRemoteSyncLoop(pin) {
   clearInterval(firebasePollTimer);
   const poll = async (force = false) => {
-    if (!isContestantView || remotePollBusy) return;
-    remotePollBusy = true;
-    try {
+    if (!isContestantView) return;
     const activeEl = document.activeElement;
     const isTyping = Boolean(activeEl && (activeEl.id === "cCustomTeamInput" || activeEl.id === "cOpenAnswerInput"));
     if (getEffectiveFirebaseUrl()) {
@@ -3451,7 +3271,6 @@ function startRemoteSyncLoop(pin) {
         }
       }
     }
-    } finally { remotePollBusy = false; }
   };
   renderContestantView();
   (async () => {
@@ -3614,10 +3433,9 @@ function getActiveContestantTeamId() {
 
 function contestantAnswer(ans) {
   const teamId = getActiveContestantTeamId();
-  if (!teamId) return showToast("يرجى تسجيل اسم فريقك أولاً");
-  if (!state.questionOpen || state.timeExpired || !state.activeQuestionId) return;
+  if (!teamId || !state.questionOpen || state.timeExpired || !state.activeQuestionId) return;
   const trimmed = (ans || "").trim();
-  if (!trimmed) return showToast("لا يمكن إرسال إجابة فارغة");
+  if (!trimmed) return;
   const elapsed = state.questionStartTime ? Math.max(0.1, parseFloat(((Date.now() - state.questionStartTime) / 1000).toFixed(1))) : 0.5;
   if (!state.responses) state.responses = {};
   state.responses[teamId] = {
