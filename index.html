@@ -1524,12 +1524,41 @@ function renderStageLive() {
   });
 }
 
-function autoGradeQcm() {
+function normalizeAnswerText(str) {
+  return String(str || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/[\u064B-\u065F\u0670]/g, "")
+    .replace(/[إأآا]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه")
+    .toLowerCase();
+}
+
+async function flushSupervisorIncomingActions() {
+  if (!getEffectiveFirebaseUrl() || !state.pin) return false;
+  const base = getEffectiveFirebaseUrl().replace(/\/+$/, "");
+  try {
+    const actRes = await fetch(`${base}/quiz_rooms/${state.pin}/actions.json`, { cache: "no-store" });
+    if (actRes.ok) {
+      const actionsObj = await actRes.json();
+      return await applyIncomingActions(state.pin, actionsObj);
+    }
+  } catch (e) {}
+  return false;
+}
+
+async function autoGradeQcm() {
+  await flushSupervisorIncomingActions();
   const q = state.questions.find(item => item.id === state.activeQuestionId);
   if (!q || q.type !== "qcm") return;
   revealAnswer();
 
+  const expectedRaw = (q.answer || "").trim();
+  const expectedNorm = normalizeAnswerText(expectedRaw);
+  let awardedTeamsCount = 0;
   let gradedAny = false;
+
   state.teams.forEach(t => {
     const r = state.responses?.[t.id];
     if (!r) return;
@@ -1538,13 +1567,17 @@ function autoGradeQcm() {
       r.graded = true;
       return;
     }
-    const isCorrect = submitted === (q.answer || "").trim();
+    const isCorrect = (submitted === expectedRaw) || (expectedNorm && normalizeAnswerText(submitted) === expectedNorm);
     if (isCorrect) {
-      if (!r.graded && !hasQuestionPointsAwarded(t.id, q.id)) {
-        awardQuestionPointsToTeam(t.id, q.id);
-        t.lastFeedback = `إجابة صحيحة (${q.points} ن)`;
-        gradedAny = true;
+      if (!hasQuestionPointsAwarded(t.id, q.id)) {
+        const didAward = awardQuestionPointsToTeam(t.id, q.id);
+        if (didAward) {
+          t.lastFeedback = `إجابة صحيحة (${q.points} ن)`;
+          awardedTeamsCount++;
+          gradedAny = true;
+        }
       }
+      r.graded = true;
     } else {
       r.graded = true;
       t.lastFeedback = "إجابة غير مطابقة";
@@ -1555,7 +1588,13 @@ function autoGradeQcm() {
   saveState(true);
   renderAll();
   renderStageLive();
-  showToast(gradedAny ? "تم اعتماد التصحيح الآلي ومنح نقاط السؤال مرة واحدة" : "تمت مراجعة إجابات QCM مسبقاً");
+  if (awardedTeamsCount > 0) {
+    showToast(`تم اعتماد التصحيح الآلي ومنح النقاط فوراً لـ ${awardedTeamsCount} فريق`);
+  } else if (gradedAny) {
+    showToast("تمت مراجعة الإجابات؛ لا توجد إجابات صحيحة جديدة غير ممنوحة");
+  } else {
+    showToast("لم يقم أي فريق بإرسال إجابة بعد");
+  }
 }
 
 function reopenBuzzer() {
@@ -2949,7 +2988,7 @@ async function applyIncomingActions(pin, actionsObj) {
       }
     } else if (act.type === "BUZZ" && act.teamId) {
       const targetQId = state.activeQuestionId || act.questionId || "";
-      if (!state.buzzerLockedBy) {
+      if (!state.buzzerLockedBy && !state.timeExpired) {
         if (targetQId) state.activeQuestionId = targetQId;
         state.questionOpen = true;
         state.buzzerLockedBy = act.teamId;
@@ -3251,7 +3290,14 @@ function contestantAnswer(ans) {
 
 function contestantBuzz() {
   const teamId = getActiveContestantTeamId();
-  if (!teamId || state.buzzerLockedBy) return;
+  if (!teamId) {
+    showToast("يرجى كتابة اسم فريقك وتأكيده أولاً");
+    return;
+  }
+  if (state.buzzerLockedBy) {
+    showToast("تم قفل الجرس مسبقاً لفريق آخر");
+    return;
+  }
   const qId = state.activeQuestionId || ((state.questions.find(item => item.type === "buzzer") || state.questions[0] || {}).id) || "";
   const elapsed = state.questionStartTime ? Math.max(0.1, parseFloat(((Date.now() - state.questionStartTime) / 1000).toFixed(1))) : 0.4;
   state.activeQuestionId = qId;
