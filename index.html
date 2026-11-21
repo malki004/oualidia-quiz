@@ -1048,16 +1048,26 @@ document.addEventListener("pointerdown", () => {
   getAudioCtx();
 }, { passive: true });
 
-function playBuzzerSound() {
+async function playBuzzerSound() {
   try {
+    const stageModalEl = document.querySelector("#stageModal .modal");
+    if (stageModalEl) {
+      stageModalEl.style.boxShadow = "0 0 0 4px #ef4444, 0 24px 60px rgba(239,68,68,0.55)";
+      setTimeout(() => {
+        stageModalEl.style.boxShadow = "";
+      }, 900);
+    }
     const ctx = getAudioCtx();
     if (!ctx) return;
-    const now = ctx.currentTime + 0.01;
+    if (ctx.state === "suspended") {
+      try { await ctx.resume(); } catch (e) {}
+    }
+    const now = ctx.currentTime + 0.02;
     // Urgent 3-pulse quiz buzzer chime
     const notes = [
-      { f: 587.33, t: 0.0, d: 0.14 },
-      { f: 880.0,  t: 0.14, d: 0.14 },
-      { f: 1174.66, t: 0.28, d: 0.24 }
+      { f: 587.33, t: 0.0, d: 0.16 },
+      { f: 880.0,  t: 0.15, d: 0.16 },
+      { f: 1174.66, t: 0.30, d: 0.28 }
     ];
     notes.forEach(({ f, t, d }) => {
       const osc = ctx.createOscillator();
@@ -1066,12 +1076,12 @@ function playBuzzerSound() {
       const start = now + t;
       osc.frequency.setValueAtTime(f, start);
       gain.gain.setValueAtTime(0.001, start);
-      gain.gain.linearRampToValueAtTime(0.28, start + 0.02);
+      gain.gain.linearRampToValueAtTime(0.35, start + 0.02);
       gain.gain.exponentialRampToValueAtTime(0.001, start + d);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(start);
-      osc.stop(start + d + 0.02);
+      osc.stop(start + d + 0.03);
     });
   } catch (e) {}
 }
@@ -1474,15 +1484,14 @@ function renderStageLive() {
   const chipsWrap = document.getElementById("liveResponsesChips");
   chipsWrap.innerHTML = "";
 
-  if (q.type === "buzzer" && state.buzzerLockedBy) {
+  if (state.buzzerLockedBy) {
     const buzTeam = state.teams.find(t => t.id === state.buzzerLockedBy);
     const buzResp = state.responses?.[state.buzzerLockedBy] || {};
-    if (buzTeam) {
-      const banner = document.createElement("div");
-      banner.style.cssText = "width:100%; padding:10px 12px; border-radius:10px; background:rgba(239,68,68,0.18); border:1px solid #ef4444; font-weight:700; margin-bottom:6px;";
-      banner.textContent = `🔔 الأسرع على الجرس: ${buzTeam.name} (${buzResp.timeSec ?? "?"} ثانية)`;
-      chipsWrap.appendChild(banner);
-    }
+    const buzLabel = buzTeam ? buzTeam.name : `فريق (${state.buzzerLockedBy})`;
+    const banner = document.createElement("div");
+    banner.style.cssText = "width:100%; padding:12px 14px; border-radius:10px; background:rgba(239,68,68,0.22); border:2px solid #ef4444; font-weight:800; font-size:1rem; margin-bottom:8px;";
+    banner.textContent = `🔔 الأسرع على الجرس: ${buzLabel} (${buzResp.timeSec ?? "?"} ثانية)`;
+    chipsWrap.appendChild(banner);
   }
 
   const openAnswersUnlocked = Boolean(state.timeExpired || state.openAnswersRevealed || !state.questionOpen);
@@ -3001,8 +3010,25 @@ async function applyIncomingActions(pin, actionsObj) {
           timeSec: act.timeSec ?? 0,
           graded: false
         };
-        const team = state.teams.find(t => t.id === act.teamId);
-        if (team) team.lastFeedback = `🔔 ضغط الجرس أولاً (${act.timeSec ?? 0}ث)`;
+        let team = state.teams.find(t => t.id === act.teamId);
+        if (!team && act.teamName) {
+          team = {
+            id: act.teamId,
+            name: act.teamName,
+            score: 0,
+            roundScores: [0, 0, 0],
+            domainHits: {},
+            jokers: { double: false, fifty: false, audience: false },
+            armedDouble: false,
+            connected: true,
+            lastFeedback: ""
+          };
+          state.teams.push(team);
+        }
+        if (team) {
+          team.connected = true;
+          team.lastFeedback = `🔔 ضغط الجرس أولاً (${act.timeSec ?? 0}ث)`;
+        }
         playBuzzerSound();
         mutated = true;
       }
@@ -3318,6 +3344,7 @@ function contestantBuzz() {
   sendContestantAction(getTargetRoomPin(), {
     type: "BUZZ",
     teamId,
+    teamName: team ? team.name : "",
     questionId: qId,
     sessionId: state.stageSessionId || "",
     timeSec: elapsed
