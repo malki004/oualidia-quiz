@@ -1274,6 +1274,7 @@ function openQuestionStage(qId) {
   state.teams.forEach(t => {
     const shuffled = q.type === "qcm" ? shuffleArray([...q.options]) : [];
     state.responses[t.id] = {
+      questionId: q.id,
       answer: "",
       shuffledOptions: shuffled,
       timeSec: null,
@@ -1348,7 +1349,8 @@ function renderStageLive() {
   }
 
   state.teams.forEach(t => {
-    const r = state.responses[t.id] || {};
+    const rawR = state.responses[t.id] || {};
+    const r = (!rawR.questionId || rawR.questionId === q.id) ? rawR : {};
     const isBuzzed = state.buzzerLockedBy === t.id;
     const chip = document.createElement("div");
     chip.className = "resp-chip" + (r.answer ? " answered" : "") + (isBuzzed ? " buzzed" : "");
@@ -2618,17 +2620,34 @@ function mergeRemoteState(remote) {
     teams: (remote.teams || []).map(t => ({ id: t.id, name: t.name, score: t.score, connected: t.connected, lastFeedback: t.lastFeedback }))
   });
 
-  const prevAns = contestantTeamId ? state.responses?.[contestantTeamId]?.answer : null;
+  const activeQBefore = state.activeQuestionId;
   state = {
     ...state,
     ...remote,
     teams: Array.isArray(remote.teams) ? remote.teams : state.teams,
     questions: Array.isArray(remote.questions) ? remote.questions : state.questions,
     domains: Array.isArray(remote.domains) ? remote.domains : state.domains,
-    responses: (remote.responses && typeof remote.responses === "object") ? remote.responses : (state.responses || {})
+    responses: (remote.responses && typeof remote.responses === "object") ? remote.responses : {}
   };
-  if (contestantTeamId && prevAns && state.responses?.[contestantTeamId] && !state.responses[contestantTeamId].answer) {
-    state.responses[contestantTeamId].answer = prevAns;
+  if (contestantTeamId && state.responses?.[contestantTeamId]) {
+    const rObj = state.responses[contestantTeamId];
+    if (rObj.questionId && state.activeQuestionId && rObj.questionId !== state.activeQuestionId) {
+      state.responses[contestantTeamId] = {
+        questionId: state.activeQuestionId,
+        answer: "",
+        shuffledOptions: [],
+        timeSec: null,
+        graded: false
+      };
+    } else if (!rObj.questionId && activeQBefore && state.activeQuestionId && activeQBefore !== state.activeQuestionId) {
+      state.responses[contestantTeamId] = {
+        questionId: state.activeQuestionId,
+        answer: "",
+        shuffledOptions: [],
+        timeSec: null,
+        graded: false
+      };
+    }
   }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -2841,6 +2860,16 @@ function startRemoteSyncLoop(pin) {
   firebasePollTimer = setInterval(poll, 1500);
 }
 
+function getQuestionResponse(teamId, questionId) {
+  if (!teamId || !questionId || !state.responses || typeof state.responses !== "object") return {};
+  const r = state.responses[teamId];
+  if (!r || typeof r !== "object") return {};
+  if (r.questionId && r.questionId !== questionId) {
+    return { questionId, answer: "", shuffledOptions: [], timeSec: null, graded: false };
+  }
+  return r;
+}
+
 function renderContestantView() {
   if (!isContestantView) return;
   const activeEl = document.activeElement;
@@ -2878,7 +2907,7 @@ function renderContestantView() {
 
   const stage = document.getElementById("cStageArea");
   const q = state.questions.find(item => item.id === state.activeQuestionId);
-  const resp = (team && state.responses && state.responses[team.id]) ? state.responses[team.id] : {};
+  const resp = (team && q) ? getQuestionResponse(team.id, q.id) : {};
 
   if (!q || !state.questionOpen) {
     stage.innerHTML = `
@@ -2945,8 +2974,9 @@ function contestantAnswer(ans) {
   const elapsed = state.questionStartTime ? Math.max(0.1, parseFloat(((Date.now() - state.questionStartTime) / 1000).toFixed(1))) : 0.5;
   if (!state.responses) state.responses = {};
   state.responses[teamId] = {
-    ...(state.responses[teamId] || {}),
+    questionId: state.activeQuestionId,
     answer: trimmed,
+    shuffledOptions: (state.responses[teamId] && state.responses[teamId].questionId === state.activeQuestionId) ? (state.responses[teamId].shuffledOptions || []) : [],
     timeSec: elapsed,
     graded: false
   };
@@ -2964,9 +2994,11 @@ function contestantBuzz() {
   state.buzzerLockedBy = teamId;
   if (!state.responses) state.responses = {};
   state.responses[teamId] = {
-    ...(state.responses[teamId] || {}),
+    questionId: state.activeQuestionId,
     answer: "BUZZ",
-    timeSec: elapsed
+    shuffledOptions: [],
+    timeSec: elapsed,
+    graded: false
   };
   const team = state.teams.find(t => t.id === teamId);
   if (team) team.lastFeedback = `🔔 ضغط الجرس أولاً (${elapsed}ث)`;
