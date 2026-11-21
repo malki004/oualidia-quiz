@@ -1034,26 +1034,44 @@ function showToast(msg) {
   showToast._t = setTimeout(() => el.classList.remove("show"), 2600);
 }
 
+let sharedAudioCtx = null;
+function getAudioCtx() {
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;
+  if (!sharedAudioCtx) sharedAudioCtx = new Ctx();
+  if (sharedAudioCtx.state === "suspended") {
+    sharedAudioCtx.resume().catch(() => {});
+  }
+  return sharedAudioCtx;
+}
+document.addEventListener("pointerdown", () => {
+  getAudioCtx();
+}, { passive: true });
+
 function playBuzzerSound() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const now = ctx.currentTime;
-    // Two-tone urgent quiz buzzer chime
-    const freqs = [587.33, 880]; // D5 -> A5
-    freqs.forEach((f, idx) => {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    const now = ctx.currentTime + 0.01;
+    // Urgent 3-pulse quiz buzzer chime
+    const notes = [
+      { f: 587.33, t: 0.0, d: 0.14 },
+      { f: 880.0,  t: 0.14, d: 0.14 },
+      { f: 1174.66, t: 0.28, d: 0.24 }
+    ];
+    notes.forEach(({ f, t, d }) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = "triangle";
-      const start = now + idx * 0.13;
-      const dur = 0.16;
+      const start = now + t;
       osc.frequency.setValueAtTime(f, start);
       gain.gain.setValueAtTime(0.001, start);
-      gain.gain.linearRampToValueAtTime(0.24, start + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
+      gain.gain.linearRampToValueAtTime(0.28, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + d);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(start);
-      osc.stop(start + dur + 0.01);
+      osc.stop(start + d + 0.02);
     });
   } catch (e) {}
 }
@@ -1298,10 +1316,8 @@ function useAudienceJoker(teamId) {
   const team = state.teams.find(t => t.id === teamId);
   if (!team || team.jokers.audience) return;
   team.jokers.audience = true;
-  timeLeft += 15;
-  document.getElementById("timerDisplay").textContent = timeLeft;
+  adjustTimer(15);
   showToast(`${team.name} طلب مساعدة الجمهور (+15 ثانية)`);
-  saveState();
   renderTeams();
 }
 
@@ -1313,6 +1329,8 @@ function openQuestionStage(qId) {
   state.activeQuestionId = q.id;
   state.stageSessionId = "sess_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
   state.questionOpen = true;
+  state.timeExpired = false;
+  state.openAnswersRevealed = false;
   state.questionStartTime = Date.now();
   state.buzzerLockedBy = null;
   state.responses = {};
@@ -1400,6 +1418,20 @@ function renderStageLive() {
     }
   }
 
+  const openAnswersUnlocked = Boolean(state.timeExpired || state.openAnswersRevealed || !state.questionOpen);
+
+  if (q.type === "open" && !openAnswersUnlocked) {
+    const notice = document.createElement("div");
+    notice.style.cssText = "width:100%; padding:8px 12px; border-radius:10px; background:rgba(14,165,233,0.14); border:1px solid rgba(14,165,233,0.4); font-size:0.84rem; margin-bottom:6px;";
+    notice.textContent = "🔒 الإجابات المكتوبة مخفية أثناء العد التنازلي، وسيتم إغلاق الإرسال وإظهار جميع الإجابات تلقائياً عند انتهاء الوقت.";
+    chipsWrap.appendChild(notice);
+  } else if (q.type === "open" && openAnswersUnlocked) {
+    const notice = document.createElement("div");
+    notice.style.cssText = "width:100%; padding:8px 12px; border-radius:10px; background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.45); font-size:0.84rem; font-weight:700; margin-bottom:6px;";
+    notice.textContent = "🔓 انتهى الوقت / تم إغلاق الإجابة — هذه جميع إجابات الفرق المكتوبة:";
+    chipsWrap.appendChild(notice);
+  }
+
   state.teams.forEach(t => {
     const rawR = state.responses[t.id] || {};
     const validQ = !rawR.questionId || rawR.questionId === q.id;
@@ -1412,9 +1444,13 @@ function renderStageLive() {
     if (q.type === "buzzer") {
       detail = isBuzzed ? `🔔 ضغط أولاً (${r.timeSec || "?"}ث)` : (state.buzzerLockedBy ? "🔒 مقفل" : "⏳ جاهز للجرس");
     } else if (r.answer) {
-      detail = q.type === "qcm"
-        ? `✅ أجاب (${r.timeSec}ث)${document.getElementById("stageAnswerReveal").classList.contains("show") ? " : " + r.answer : ""}`
-        : `💬 "${r.answer}" (${r.timeSec}ث)`;
+      if (q.type === "qcm") {
+        detail = `✅ أجاب (${r.timeSec}ث)${document.getElementById("stageAnswerReveal").classList.contains("show") ? " : " + r.answer : ""}`;
+      } else {
+        detail = openAnswersUnlocked
+          ? `💬 "${r.answer}" (${r.timeSec}ث)`
+          : `🔒 تم إرسال الإجابة (${r.timeSec}ث) — مخفية حتى انتهاء الوقت`;
+      }
     }
     chip.innerHTML = `<strong>${escapeHtml(t.name)}</strong><br><span style="font-size:0.78rem; color:var(--text-muted);">${escapeHtml(detail)}</span>`;
     chipsWrap.appendChild(chip);
@@ -1519,9 +1555,13 @@ function startTimer() {
       updateTimerDisplay();
       stopTimer();
       state.questionOpen = false;
+      state.timeExpired = true;
+      state.openAnswersRevealed = true;
       playTone(330, 0.45, "sawtooth");
-      saveState();
+      saveState(true);
+      renderAll();
       renderSim();
+      if (isContestantView) renderContestantView();
     }
   }, 1000);
 }
@@ -1545,16 +1585,33 @@ function toggleTimer() {
 }
 
 function adjustTimer(sec) {
+  const prevTime = timeLeft;
   timeLeft = Math.max(0, timeLeft + sec);
   updateTimerDisplay();
+
+  if (timeLeft > 0 && (sec > 0 || prevTime === 0)) {
+    state.questionOpen = true;
+    state.timeExpired = false;
+    state.openAnswersRevealed = false;
+    if (!timerRunning) {
+      startTimer();
+    }
+    saveState(true);
+    renderAll();
+    renderSim();
+    if (isContestantView) renderContestantView();
+  }
 }
 
 function resetTimer() {
   const q = state.questions.find(item => item.id === state.activeQuestionId);
   timeLeft = q ? (q.time || 30) : 30;
   state.questionOpen = true;
+  state.timeExpired = false;
+  state.openAnswersRevealed = false;
   startTimer();
   saveState();
+  renderStageLive();
 }
 
 function updateTimerDisplay() {
@@ -1608,29 +1665,35 @@ function renderSim() {
     `;
   } else if (q.type === "qcm") {
     const opts = resp.shuffledOptions && resp.shuffledOptions.length ? resp.shuffledOptions : q.options;
+    const canEditSim = Boolean(state.questionOpen && !state.timeExpired);
+    const editingSim = Boolean(window._editingSimAnswer && canEditSim);
     html += `<div style="font-weight:700; margin-bottom:10px;">${escapeHtml(q.text)}</div>`;
-    if (resp.answer) {
+    if (resp.answer && !editingSim) {
       html += `<div style="padding:12px; background:rgba(16,185,129,0.2); border-radius:10px; text-align:center;">
         ✅ تم تسجيل إجابتك: <strong>${escapeHtml(resp.answer)}</strong>
+        ${canEditSim ? `<div style="margin-top:8px;"><button type="button" onclick="window._editingSimAnswer=true; renderSim();">✏️ تعديل</button></div>` : ""}
       </div>`;
     } else {
       html += opts.map((opt, idx) => `
-        <button class="phone-opt-btn" onclick="submitTeamAnswer('${team.id}', '${escapeJs(opt)}')">
+        <button class="phone-opt-btn" onclick="window._editingSimAnswer=false; submitTeamAnswer('${team.id}', '${escapeJs(opt)}')">
           ${["أ", "ب", "ج", "د"][idx] || idx + 1}) ${escapeHtml(opt)}
         </button>
       `).join("");
     }
   } else {
+    const canEditSim = Boolean(state.questionOpen && !state.timeExpired);
+    const editingSim = Boolean(window._editingSimAnswer && canEditSim);
     html += `<div style="font-weight:700; margin-bottom:10px;">${escapeHtml(q.text)}</div>`;
-    if (resp.answer) {
+    if (resp.answer && !editingSim) {
       html += `<div style="padding:12px; background:rgba(16,185,129,0.2); border-radius:10px; text-align:center;">
         ✅ تم إرسال إجابتك: <strong>${escapeHtml(resp.answer)}</strong>
+        ${canEditSim ? `<div style="margin-top:8px;"><button type="button" onclick="window._editingSimAnswer=true; renderSim();">✏️ تعديل</button></div>` : ""}
       </div>`;
     } else {
       html += `
-        <input type="text" id="phoneOpenInput" placeholder="اكتب إجابتك هنا..." />
-        <button class="primary" style="width:100%; margin-top:8px; justify-content:center;" onclick="submitTeamAnswer('${team.id}', document.getElementById('phoneOpenInput').value)">
-          إرسال الإجابة 📤
+        <input type="text" id="phoneOpenInput" value="${escapeHtml(resp.answer || "")}" placeholder="اكتب إجابتك هنا..." />
+        <button class="primary" style="width:100%; margin-top:8px; justify-content:center;" onclick="window._editingSimAnswer=false; submitTeamAnswer('${team.id}', document.getElementById('phoneOpenInput').value)">
+          حفظ / إرسال الإجابة 📤
         </button>
       `;
     }
@@ -2662,6 +2725,8 @@ function mergeRemoteState(remote) {
   const localSig = JSON.stringify({
     activeQuestionId: state.activeQuestionId,
     questionOpen: state.questionOpen,
+    timeExpired: state.timeExpired,
+    openAnswersRevealed: state.openAnswersRevealed,
     buzzerLockedBy: state.buzzerLockedBy,
     responses: state.responses,
     teams: (state.teams || []).map(t => ({ id: t.id, name: t.name, score: t.score, connected: t.connected, lastFeedback: t.lastFeedback }))
@@ -2669,6 +2734,8 @@ function mergeRemoteState(remote) {
   const remoteSig = JSON.stringify({
     activeQuestionId: remote.activeQuestionId,
     questionOpen: remote.questionOpen,
+    timeExpired: remote.timeExpired,
+    openAnswersRevealed: remote.openAnswersRevealed,
     buzzerLockedBy: remote.buzzerLockedBy,
     responses: remote.responses,
     teams: (remote.teams || []).map(t => ({ id: t.id, name: t.name, score: t.score, connected: t.connected, lastFeedback: t.lastFeedback }))
@@ -2775,15 +2842,15 @@ async function applyIncomingActions(pin, actionsObj) {
         mutated = true;
       }
     } else if (act.type === "BUZZ" && act.teamId) {
-      const matchesQ = !act.questionId || !state.activeQuestionId || act.questionId === state.activeQuestionId;
-      const matchesSess = !act.sessionId || !state.stageSessionId || act.sessionId === state.stageSessionId;
-      if (matchesQ && matchesSess && state.activeQuestionId && !state.buzzerLockedBy) {
-        state.questionOpen = true;
+      const targetQId = state.activeQuestionId || act.questionId;
+      const matchesQ = !act.questionId || !targetQId || act.questionId === targetQId;
+      if (matchesQ && targetQId && !state.buzzerLockedBy) {
+        state.activeQuestionId = targetQId;
         state.buzzerLockedBy = act.teamId;
         if (!state.responses) state.responses = {};
         state.responses[act.teamId] = {
-          questionId: state.activeQuestionId,
-          sessionId: state.stageSessionId,
+          questionId: targetQId,
+          sessionId: act.sessionId || state.stageSessionId || "",
           answer: "BUZZ",
           shuffledOptions: [],
           timeSec: act.timeSec ?? 0,
@@ -2795,16 +2862,18 @@ async function applyIncomingActions(pin, actionsObj) {
         mutated = true;
       }
     } else if (act.type === "ANSWER" && act.teamId) {
-      if (state.questionOpen && state.activeQuestionId) {
+      if (state.questionOpen && !state.timeExpired && state.activeQuestionId) {
         if (!state.responses) state.responses = {};
         state.responses[act.teamId] = {
           ...(state.responses[act.teamId] || {}),
+          questionId: state.activeQuestionId,
+          sessionId: state.stageSessionId || "",
           answer: act.answer,
           timeSec: act.timeSec ?? 0,
           graded: false
         };
         const team = state.teams.find(t => t.id === act.teamId);
-        if (team) team.lastFeedback = `تم إرسال الإجابة (${act.timeSec ?? 0}ث)`;
+        if (team) team.lastFeedback = `تم تحديث الإجابة (${act.timeSec ?? 0}ث)`;
         mutated = true;
       }
     }
@@ -2994,27 +3063,36 @@ function renderContestantView() {
     `;
   } else if (q.type === "qcm") {
     const opts = (resp.shuffledOptions && resp.shuffledOptions.length) ? resp.shuffledOptions : (q.options || []);
-    if (resp.answer) {
+    const canEdit = Boolean(state.questionOpen && !state.timeExpired && team);
+    const editingThis = Boolean(window._editingContestantAnswer && canEdit);
+    if (resp.answer && !editingThis) {
       bodyHtml += `<div style="padding:14px; background:rgba(16,185,129,0.2); border-radius:12px; text-align:center;">
         ✅ تم تسجيل إجابتك: <strong>${escapeHtml(resp.answer)}</strong>
+        ${canEdit ? `<div style="margin-top:10px;"><button type="button" onclick="window._editingContestantAnswer=true; renderContestantView();">✏️ تعديل الإجابة</button></div>` : ""}
       </div>`;
     } else {
       bodyHtml += opts.map((opt, idx) => `
-        <button type="button" class="phone-opt-btn" ${!team ? "disabled" : ""} onclick="contestantAnswer('${escapeJs(opt)}')">
+        <button type="button" class="phone-opt-btn" ${!canEdit ? "disabled" : ""} onclick="window._editingContestantAnswer=false; contestantAnswer('${escapeJs(opt)}')">
           ${["أ", "ب", "ج", "د"][idx] || idx + 1}) ${escapeHtml(opt)}
         </button>
       `).join("");
     }
   } else {
-    if (resp.answer) {
+    if (!state.questionOpen || state.timeExpired) {
+      window._editingContestantAnswer = false;
+      bodyHtml += `<div style="padding:14px; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.45); border-radius:12px; text-align:center; font-weight:700;">
+        🔒 انتهى الوقت وتم غلق إمكانية الإجابة تلقائياً.
+      </div>`;
+    } else if (resp.answer && !window._editingContestantAnswer) {
       bodyHtml += `<div style="padding:14px; background:rgba(16,185,129,0.2); border-radius:12px; text-align:center;">
-        ✅ تم إرسال إجابتك: <strong>${escapeHtml(resp.answer)}</strong>
+        ✅ تم تسجيل إجابتك بنجاح (ستظهر للجميع بعد انتهاء الوقت).
+        <div style="margin-top:10px;"><button type="button" onclick="window._editingContestantAnswer=true; renderContestantView();">✏️ تعديل الإجابة</button></div>
       </div>`;
     } else {
       bodyHtml += `
-        <input type="text" id="cOpenAnswerInput" placeholder="اكتب إجابتك هنا..." />
-        <button type="button" class="primary" style="width:100%; margin-top:10px; justify-content:center; padding:12px;" ${!team ? "disabled" : ""} onclick="contestantAnswer(document.getElementById('cOpenAnswerInput').value)">
-          إرسال الإجابة 📤
+        <input type="text" id="cOpenAnswerInput" value="${escapeHtml(resp.answer || "")}" placeholder="اكتب إجابتك هنا..." />
+        <button type="button" class="primary" style="width:100%; margin-top:10px; justify-content:center; padding:12px;" ${!team ? "disabled" : ""} onclick="window._editingContestantAnswer=false; contestantAnswer(document.getElementById('cOpenAnswerInput').value)">
+          حفظ / إرسال الإجابة 📤
         </button>
       `;
     }
@@ -3030,7 +3108,7 @@ function getActiveContestantTeamId() {
 
 function contestantAnswer(ans) {
   const teamId = getActiveContestantTeamId();
-  if (!teamId || !state.questionOpen || !state.activeQuestionId) return;
+  if (!teamId || !state.questionOpen || state.timeExpired || !state.activeQuestionId) return;
   const trimmed = (ans || "").trim();
   if (!trimmed) return;
   const elapsed = state.questionStartTime ? Math.max(0.1, parseFloat(((Date.now() - state.questionStartTime) / 1000).toFixed(1))) : 0.5;
