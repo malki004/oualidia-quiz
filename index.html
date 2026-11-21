@@ -1082,63 +1082,7 @@ const BUZZER_WAV_URI = "data:audio/wav;base64,UklGRqhNAABXQVZFZm10IBAAAAABAAEAIl
 let buzzerAudioEl = null;
 
 function playBuzzerSound() {
-  try {
-    const targets = [
-      document.querySelector("#stageModal .modal"),
-      document.querySelector(".topbar"),
-      isContestantView ? document.querySelector(".contestant-card") : null
-    ].filter(Boolean);
-
-    targets.forEach(el => {
-      el.classList.remove("buzzer-flash-active");
-      void el.offsetWidth;
-      el.classList.add("buzzer-flash-active");
-      setTimeout(() => el.classList.remove("buzzer-flash-active"), 1500);
-    });
-
-    const triggerSynth = (ctx) => {
-      const now = ctx.currentTime + 0.01;
-      const notes = [
-        { f: 659.25, t: 0.0, d: 0.16 },
-        { f: 880.0,  t: 0.14, d: 0.16 },
-        { f: 1174.66, t: 0.28, d: 0.34 }
-      ];
-      notes.forEach(({ f, t, d }) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = "triangle";
-        const start = now + t;
-        osc.frequency.setValueAtTime(f, start);
-        gain.gain.setValueAtTime(0.001, start);
-        gain.gain.linearRampToValueAtTime(0.55, start + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.001, start + d);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(start);
-        osc.stop(start + d + 0.04);
-      });
-    };
-
-    const ctx = getAudioCtx();
-    if (ctx) {
-      if (ctx.state === "running") {
-        triggerSynth(ctx);
-      } else if (typeof ctx.resume === "function") {
-        ctx.resume().then(() => {
-          if (ctx.state === "running") triggerSynth(ctx);
-        }).catch(() => {});
-      }
-    }
-
-    if (!buzzerAudioEl) {
-      buzzerAudioEl = new Audio(BUZZER_WAV_URI);
-      buzzerAudioEl.preload = "auto";
-    }
-    buzzerAudioEl.currentTime = 0;
-    buzzerAudioEl.volume = 1.0;
-    const p = buzzerAudioEl.play();
-    if (p && typeof p.catch === "function") p.catch(() => {});
-  } catch (e) {}
+  // Audio disabled by supervisor preference; direct instant display is used instead
 }
 
 let lastAlertedBuzzerKey = "";
@@ -1156,12 +1100,13 @@ function triggerSupervisorBuzzerAlert(teamId, timeSec = null) {
   const banner = document.getElementById("stageBuzzerBanner");
   const bannerText = document.getElementById("stageBuzzerBannerText");
   if (banner && bannerText) {
-    bannerText.textContent = `🔔 الأسرع على الجرس: ${tName}${secStr}`;
+    bannerText.textContent = `⚡ الأسرع ضغطاً: ${tName}${secStr}`;
     banner.classList.add("show");
   }
 
-  playBuzzerSound();
-  showToast(`🔔 ضغط الجرس: ${tName}${secStr}`);
+  if (document.getElementById("stageModal")?.classList.contains("open")) {
+    renderStageLive();
+  }
 }
 
 function playTone(freq = 660, duration = 0.18, type = "sine") {
@@ -1922,18 +1867,17 @@ function submitBuzzer(teamId) {
     if (firstBuz) state.activeQuestionId = firstBuz.id;
   }
   state.buzzerLockedBy = teamId;
-  stopTimer();
   const elapsed = state.questionStartTime ? Math.max(0.1, parseFloat(((Date.now() - state.questionStartTime) / 1000).toFixed(1))) : 0.4;
   if (!state.responses) state.responses = {};
   state.responses[teamId] = {
     questionId: state.activeQuestionId || "",
     sessionId: state.stageSessionId || "",
-    answer: "🔔",
+    answer: "⚡ ضغط أسرع",
     timeSec: elapsed,
     graded: false
   };
   const team = state.teams.find(t => t.id === teamId);
-  if (team) team.lastFeedback = `🔔 (${elapsed}ث)`;
+  if (team) team.lastFeedback = `⚡ الأسرع (${elapsed}ث)`;
   saveState(true);
   renderAll();
   triggerSupervisorBuzzerAlert(teamId, elapsed);
@@ -3104,12 +3048,11 @@ async function applyIncomingActions(pin, actionsObj) {
       if (!state.buzzerLockedBy && !state.timeExpired) {
         if (targetQId) state.activeQuestionId = targetQId;
         state.buzzerLockedBy = act.teamId;
-        stopTimer();
         if (!state.responses) state.responses = {};
         state.responses[act.teamId] = {
           questionId: targetQId,
           sessionId: act.sessionId || state.stageSessionId || "",
-          answer: "🔔",
+          answer: "⚡ ضغط أسرع",
           shuffledOptions: [],
           timeSec: act.timeSec ?? 0,
           graded: false
@@ -3131,7 +3074,7 @@ async function applyIncomingActions(pin, actionsObj) {
         }
         if (team) {
           team.connected = true;
-          team.lastFeedback = `🔔 (${act.timeSec ?? 0}ث)`;
+          team.lastFeedback = `⚡ الأسرع (${act.timeSec ?? 0}ث)`;
         }
         mutated = true;
         triggerSupervisorBuzzerAlert(act.teamId, act.timeSec ?? 0);
@@ -3231,6 +3174,9 @@ function startSupervisorSyncLoop() {
           if (changed) {
             renderAll();
             renderSim();
+            if (document.getElementById("stageModal")?.classList.contains("open")) {
+              renderStageLive();
+            }
           }
         }
       }
