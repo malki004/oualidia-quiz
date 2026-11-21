@@ -1253,14 +1253,71 @@ function quickDeleteTeam(teamId) {
   showToast("تم حذف الفريق");
 }
 
+function hasQuestionPointsAwarded(teamId, questionId) {
+  if (!questionId) return false;
+  if (!state.awardedQuestionTeams || typeof state.awardedQuestionTeams !== "object") {
+    state.awardedQuestionTeams = {};
+  }
+  const list = state.awardedQuestionTeams[questionId];
+  return Array.isArray(list) && list.includes(teamId);
+}
+
+function markQuestionPointsAwarded(teamId, questionId) {
+  if (!questionId || !teamId) return;
+  if (!state.awardedQuestionTeams || typeof state.awardedQuestionTeams !== "object") {
+    state.awardedQuestionTeams = {};
+  }
+  if (!Array.isArray(state.awardedQuestionTeams[questionId])) {
+    state.awardedQuestionTeams[questionId] = [];
+  }
+  if (!state.awardedQuestionTeams[questionId].includes(teamId)) {
+    state.awardedQuestionTeams[questionId].push(teamId);
+  }
+}
+
+function awardQuestionPointsToTeam(teamId, questionId = null) {
+  const qId = questionId || state.activeQuestionId;
+  const q = state.questions.find(item => item.id === qId);
+  const team = state.teams.find(t => t.id === teamId);
+  if (!q || !team) return false;
+
+  if (hasQuestionPointsAwarded(team.id, q.id)) {
+    showToast(`تم منح نقاط هذا السؤال مسبقاً لـ ${team.name}`);
+    return false;
+  }
+
+  const basePts = Number(q.points) || 0;
+  let awardedPts = basePts;
+  if (awardedPts > 0 && team.armedDouble) {
+    awardedPts = basePts * 2;
+    team.armedDouble = false;
+    team.jokers.double = true;
+  }
+
+  team.score = Math.max(0, (Number(team.score) || 0) + awardedPts);
+  if (awardedPts > 0 && q.domain) {
+    if (!team.domainHits || typeof team.domainHits !== "object") team.domainHits = {};
+    team.domainHits[q.domain] = (Number(team.domainHits[q.domain]) || 0) + 1;
+  }
+  if (state.responses && state.responses[team.id]) {
+    state.responses[team.id].graded = true;
+    state.responses[team.id].awarded = true;
+  }
+  markQuestionPointsAwarded(team.id, q.id);
+  team.lastFeedback = `تم منح ${awardedPts} نقطة للسؤال`;
+  if (awardedPts > 0) playTone(880, 0.16, "triangle");
+  return true;
+}
+
 function awardPointsToAllTeams() {
   const q = state.questions.find(item => item.id === state.activeQuestionId);
-  const pts = q ? (Number(q.points) || 1) : 1;
-  const dom = q ? q.domain : null;
-  if (!state.teams || !state.teams.length) return;
+  if (!q || !state.teams || !state.teams.length) return;
 
+  let awardedCount = 0;
   state.teams.forEach(t => {
-    adjustScore(t.id, pts, dom, false);
+    if (awardQuestionPointsToTeam(t.id, q.id)) {
+      awardedCount++;
+    }
   });
 
   saveState(true);
@@ -1268,25 +1325,24 @@ function awardPointsToAllTeams() {
   if (document.getElementById("stageModal").classList.contains("open")) {
     renderStageLive();
   }
-  showToast(`تم منح ${pts} نقطة لجميع الفرق دفعة واحدة`);
+  if (awardedCount > 0) {
+    showToast(`تم منح نقاط السؤال (${q.points} ن) لـ ${awardedCount} فريق مرة واحدة`);
+  } else {
+    showToast("تم منح نقاط هذا السؤال مسبقاً لجميع الفرق");
+  }
 }
 
 function adjustScore(teamId, delta, domainName = null, shouldRender = true) {
   const team = state.teams.find(t => t.id === teamId);
   if (!team) return;
   const currentScore = Number(team.score) || 0;
-  let actualDelta = Number(delta) || 0;
-  if (actualDelta > 0 && team.armedDouble) {
-    actualDelta = actualDelta * 2;
-    team.armedDouble = false;
-    team.jokers.double = true;
-  }
+  const actualDelta = Number(delta) || 0;
   team.score = Math.max(0, currentScore + actualDelta);
   if (actualDelta > 0 && domainName) {
     if (!team.domainHits || typeof team.domainHits !== "object") team.domainHits = {};
     team.domainHits[domainName] = (Number(team.domainHits[domainName]) || 0) + 1;
   }
-  team.lastFeedback = actualDelta > 0 ? `أحسنت! +${actualDelta} نقطة` : `تعديل: ${actualDelta} نقطة`;
+  team.lastFeedback = actualDelta > 0 ? `تعديل: +${actualDelta} نقطة` : `تعديل: ${actualDelta} نقطة`;
   if (actualDelta > 0) playTone(880, 0.16, "triangle");
   saveState(true);
   if (shouldRender) {
@@ -1379,19 +1435,7 @@ function openQuestionStage(qId) {
   if (awardAllBtn) {
     awardAllBtn.textContent = `⚡ منح ${q.points} ن لجميع الفرق دفعة واحدة`;
   }
-
-  const awardGrid = document.getElementById("awardTeamsGrid");
-  awardGrid.innerHTML = "";
-  state.teams.forEach(t => {
-    const btn = document.createElement("button");
-    btn.className = "success";
-    btn.textContent = `منح ${q.points} ن لـ ${t.name}`;
-    btn.onclick = () => {
-      adjustScore(t.id, q.points, q.domain);
-      renderStageLive();
-    };
-    awardGrid.appendChild(btn);
-  });
+  renderStageAwardButtons();
 
   timeLeft = q.time || 30;
   startTimer();
@@ -1400,9 +1444,32 @@ function openQuestionStage(qId) {
   document.getElementById("stageModal").classList.add("open");
 }
 
+function renderStageAwardButtons() {
+  const q = state.questions.find(item => item.id === state.activeQuestionId);
+  const awardGrid = document.getElementById("awardTeamsGrid");
+  if (!awardGrid || !q) return;
+  awardGrid.innerHTML = "";
+  state.teams.forEach(t => {
+    const alreadyAwarded = hasQuestionPointsAwarded(t.id, q.id);
+    const btn = document.createElement("button");
+    btn.className = "success";
+    btn.disabled = alreadyAwarded;
+    btn.textContent = alreadyAwarded ? `✓ تم منح ${q.points} ن لـ ${t.name}` : `منح ${q.points} ن لـ ${t.name}`;
+    btn.onclick = () => {
+      if (awardQuestionPointsToTeam(t.id, q.id)) {
+        saveState(true);
+        renderAll();
+        renderStageLive();
+      }
+    };
+    awardGrid.appendChild(btn);
+  });
+}
+
 function renderStageLive() {
   const q = state.questions.find(item => item.id === state.activeQuestionId);
   if (!q) return;
+  renderStageAwardButtons();
 
   const chipsWrap = document.getElementById("liveResponsesChips");
   chipsWrap.innerHTML = "";
@@ -1462,42 +1529,33 @@ function autoGradeQcm() {
   if (!q || q.type !== "qcm") return;
   revealAnswer();
 
-  let fastestTeamId = null;
-  let fastestTime = Infinity;
-
+  let gradedAny = false;
   state.teams.forEach(t => {
-    const r = state.responses[t.id];
-    if (r && !r.graded && r.answer && r.answer.trim() === (q.answer || "").trim()) {
-      if (typeof r.timeSec === "number" && r.timeSec < fastestTime) {
-        fastestTime = r.timeSec;
-        fastestTeamId = t.id;
-      }
-    }
-  });
-
-  state.teams.forEach(t => {
-    const r = state.responses[t.id];
-    if (!r || r.graded) return;
+    const r = state.responses?.[t.id];
+    if (!r) return;
     const submitted = (r.answer || "").trim();
     if (!submitted) {
       r.graded = true;
       return;
     }
-    r.graded = true;
     const isCorrect = submitted === (q.answer || "").trim();
     if (isCorrect) {
-      const bonus = (t.id === fastestTeamId) ? 1 : 0;
-      adjustScore(t.id, q.points + bonus, q.domain, false);
-      t.lastFeedback = `إجابة صحيحة! +${q.points + bonus} ن` + (bonus ? " (سرعة +1)" : "");
+      if (!r.graded && !hasQuestionPointsAwarded(t.id, q.id)) {
+        awardQuestionPointsToTeam(t.id, q.id);
+        t.lastFeedback = `إجابة صحيحة (${q.points} ن)`;
+        gradedAny = true;
+      }
     } else {
+      r.graded = true;
       t.lastFeedback = "إجابة غير مطابقة";
+      gradedAny = true;
     }
   });
 
-  saveState();
+  saveState(true);
   renderAll();
   renderStageLive();
-  showToast("تم اعتماد التصحيح الآلي لأسئلة QCM");
+  showToast(gradedAny ? "تم اعتماد التصحيح الآلي ومنح نقاط السؤال مرة واحدة" : "تمت مراجعة إجابات QCM مسبقاً");
 }
 
 function reopenBuzzer() {
@@ -1650,7 +1708,7 @@ function renderSim() {
     </div>
   `;
 
-  if (!q || !state.questionOpen) {
+  if (!q || (!state.questionOpen && q.type !== "buzzer")) {
     html += `<div style="padding:18px; text-align:center; background:var(--bg-card); border-radius:12px;">
       ⏳ في انتظار فتح السؤال التالي على شاشة العرض...
     </div>`;
@@ -1721,19 +1779,30 @@ function submitTeamAnswer(teamId, ans) {
 }
 
 function submitBuzzer(teamId) {
-  if (!state.questionOpen || state.buzzerLockedBy) return;
+  if (!teamId || state.buzzerLockedBy) return;
+  if (!state.activeQuestionId && Array.isArray(state.questions) && state.questions.length) {
+    const firstBuz = state.questions.find(item => item.type === "buzzer") || state.questions[0];
+    if (firstBuz) state.activeQuestionId = firstBuz.id;
+  }
+  state.questionOpen = true;
   state.buzzerLockedBy = teamId;
-  const elapsed = state.questionStartTime ? ((Date.now() - state.questionStartTime) / 1000).toFixed(1) : "0.0";
+  const elapsed = state.questionStartTime ? Math.max(0.1, parseFloat(((Date.now() - state.questionStartTime) / 1000).toFixed(1))) : 0.4;
+  if (!state.responses) state.responses = {};
   state.responses[teamId] = {
-    ...(state.responses[teamId] || {}),
+    questionId: state.activeQuestionId || "",
+    sessionId: state.stageSessionId || "",
     answer: "BUZZ",
-    timeSec: parseFloat(elapsed)
+    timeSec: elapsed,
+    graded: false
   };
   const team = state.teams.find(t => t.id === teamId);
   if (team) team.lastFeedback = `🔔 ضغط الجرس أولاً (${elapsed}ث)`;
   playBuzzerSound();
-  saveState();
+  saveState(true);
   renderAll();
+  if (document.getElementById("stageModal")?.classList.contains("open")) {
+    renderStageLive();
+  }
 }
 
 
@@ -2842,10 +2911,10 @@ async function applyIncomingActions(pin, actionsObj) {
         mutated = true;
       }
     } else if (act.type === "BUZZ" && act.teamId) {
-      const targetQId = state.activeQuestionId || act.questionId;
-      const matchesQ = !act.questionId || !targetQId || act.questionId === targetQId;
-      if (matchesQ && targetQId && !state.buzzerLockedBy) {
-        state.activeQuestionId = targetQId;
+      const targetQId = state.activeQuestionId || act.questionId || "";
+      if (!state.buzzerLockedBy) {
+        if (targetQId) state.activeQuestionId = targetQId;
+        state.questionOpen = true;
         state.buzzerLockedBy = act.teamId;
         if (!state.responses) state.responses = {};
         state.responses[act.teamId] = {
@@ -3040,7 +3109,7 @@ function renderContestantView() {
   const q = state.questions.find(item => item.id === state.activeQuestionId);
   const resp = (team && q) ? getQuestionResponse(team.id, q.id) : {};
 
-  if (!q || !state.questionOpen) {
+  if (!q || (!state.questionOpen && q.type !== "buzzer")) {
     stage.innerHTML = `
       <div style="text-align:center; padding:26px 14px; background:var(--bg-card-2); border-radius:14px;">
         <div style="font-size:1.6rem; margin-bottom:8px;">⏳</div>
@@ -3129,13 +3198,16 @@ function contestantAnswer(ans) {
 
 function contestantBuzz() {
   const teamId = getActiveContestantTeamId();
-  if (!teamId || !state.activeQuestionId || state.buzzerLockedBy) return;
-  const elapsed = state.questionStartTime ? Math.max(0.1, parseFloat(((Date.now() - state.questionStartTime) / 1000).toFixed(1))) : 0.5;
+  if (!teamId || state.buzzerLockedBy) return;
+  const qId = state.activeQuestionId || ((state.questions.find(item => item.type === "buzzer") || state.questions[0] || {}).id) || "";
+  const elapsed = state.questionStartTime ? Math.max(0.1, parseFloat(((Date.now() - state.questionStartTime) / 1000).toFixed(1))) : 0.4;
+  state.activeQuestionId = qId;
+  state.questionOpen = true;
   state.buzzerLockedBy = teamId;
   if (!state.responses) state.responses = {};
   state.responses[teamId] = {
-    questionId: state.activeQuestionId,
-    sessionId: state.stageSessionId,
+    questionId: qId,
+    sessionId: state.stageSessionId || "",
     answer: "BUZZ",
     shuffledOptions: [],
     timeSec: elapsed,
@@ -3147,8 +3219,8 @@ function contestantBuzz() {
   sendContestantAction(getTargetRoomPin(), {
     type: "BUZZ",
     teamId,
-    questionId: state.activeQuestionId,
-    sessionId: state.stageSessionId,
+    questionId: qId,
+    sessionId: state.stageSessionId || "",
     timeSec: elapsed
   });
   renderContestantView();
