@@ -637,7 +637,10 @@
     </div>
 
     <div>
-      <strong>منح النقاط للفرق (يمكن المنح لفريق أو لعدة فرق):</strong>
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <strong>منح النقاط للفرق (اضغط على فريق واحد أو على زر منح الجميع دفعة واحدة):</strong>
+        <button class="warn" id="awardAllTeamsBtn" type="button" onclick="awardPointsToAllTeams()">⚡ منح نقاط السؤال لجميع الفرق دفعة واحدة</button>
+      </div>
       <div class="award-grid" id="awardTeamsGrid"></div>
     </div>
 
@@ -1031,6 +1034,30 @@ function showToast(msg) {
   showToast._t = setTimeout(() => el.classList.remove("show"), 2600);
 }
 
+function playBuzzerSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = ctx.currentTime;
+    // Two-tone urgent quiz buzzer chime
+    const freqs = [587.33, 880]; // D5 -> A5
+    freqs.forEach((f, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      const start = now + idx * 0.13;
+      const dur = 0.16;
+      osc.frequency.setValueAtTime(f, start);
+      gain.gain.setValueAtTime(0.001, start);
+      gain.gain.linearRampToValueAtTime(0.24, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + dur + 0.01);
+    });
+  } catch (e) {}
+}
+
 function playTone(freq = 660, duration = 0.18, type = "sine") {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1112,7 +1139,7 @@ function renderTeams() {
           <span class="rank-badge">#${rank} ${team.connected ? "🟢" : "⚪"}</span>
         </div>
       </div>
-      <div class="team-score">${team.score} <span style="font-size:0.85rem; font-weight:500;">نقطة</span></div>
+      <div class="team-score" style="cursor:pointer;" title="اضغط لإضافة +1 نقطة سريعاً" onclick="adjustScore('${team.id}', 1)">${team.score} <span style="font-size:0.85rem; font-weight:500;">نقطة</span></div>
       <div class="team-meta">${escapeHtml(team.lastFeedback || (state.qualifiedTeams.includes(team.id) ? "⭐ متأهل للجولة التالية" : "جاهز للمنافسة"))}</div>
       <div class="jokers-row">
         <button class="joker-btn ${team.jokers.double ? "used" : ""} ${team.armedDouble ? "armed" : ""}" onclick="toggleDoubleJoker('${team.id}')" title="مضاعفة نقاط السؤال الحالي ×2">⚡ ×2</button>
@@ -1208,6 +1235,24 @@ function quickDeleteTeam(teamId) {
   showToast("تم حذف الفريق");
 }
 
+function awardPointsToAllTeams() {
+  const q = state.questions.find(item => item.id === state.activeQuestionId);
+  const pts = q ? (Number(q.points) || 1) : 1;
+  const dom = q ? q.domain : null;
+  if (!state.teams || !state.teams.length) return;
+
+  state.teams.forEach(t => {
+    adjustScore(t.id, pts, dom, false);
+  });
+
+  saveState(true);
+  renderAll();
+  if (document.getElementById("stageModal").classList.contains("open")) {
+    renderStageLive();
+  }
+  showToast(`تم منح ${pts} نقطة لجميع الفرق دفعة واحدة`);
+}
+
 function adjustScore(teamId, delta, domainName = null, shouldRender = true) {
   const team = state.teams.find(t => t.id === teamId);
   if (!team) return;
@@ -1266,6 +1311,7 @@ function openQuestionStage(qId) {
   if (!q) return;
 
   state.activeQuestionId = q.id;
+  state.stageSessionId = "sess_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
   state.questionOpen = true;
   state.questionStartTime = Date.now();
   state.buzzerLockedBy = null;
@@ -1275,6 +1321,7 @@ function openQuestionStage(qId) {
     const shuffled = q.type === "qcm" ? shuffleArray([...q.options]) : [];
     state.responses[t.id] = {
       questionId: q.id,
+      sessionId: state.stageSessionId,
       answer: "",
       shuffledOptions: shuffled,
       timeSec: null,
@@ -1308,6 +1355,11 @@ function openQuestionStage(qId) {
       div.textContent = `${["أ", "ب", "ج", "د"][idx] || idx + 1}) ${opt}`;
       qcmGrid.appendChild(div);
     });
+  }
+
+  const awardAllBtn = document.getElementById("awardAllTeamsBtn");
+  if (awardAllBtn) {
+    awardAllBtn.textContent = `⚡ منح ${q.points} ن لجميع الفرق دفعة واحدة`;
   }
 
   const awardGrid = document.getElementById("awardTeamsGrid");
@@ -1350,7 +1402,9 @@ function renderStageLive() {
 
   state.teams.forEach(t => {
     const rawR = state.responses[t.id] || {};
-    const r = (!rawR.questionId || rawR.questionId === q.id) ? rawR : {};
+    const validQ = !rawR.questionId || rawR.questionId === q.id;
+    const validSess = !rawR.sessionId || !state.stageSessionId || rawR.sessionId === state.stageSessionId;
+    const r = (validQ && validSess) ? rawR : {};
     const isBuzzed = state.buzzerLockedBy === t.id;
     const chip = document.createElement("div");
     chip.className = "resp-chip" + (r.answer ? " answered" : "") + (isBuzzed ? " buzzed" : "");
@@ -1614,7 +1668,7 @@ function submitBuzzer(teamId) {
   };
   const team = state.teams.find(t => t.id === teamId);
   if (team) team.lastFeedback = `🔔 ضغط الجرس أولاً (${elapsed}ث)`;
-  playTone(980, 0.25, "square");
+  playBuzzerSound();
   saveState();
   renderAll();
 }
@@ -2629,25 +2683,24 @@ function mergeRemoteState(remote) {
     domains: Array.isArray(remote.domains) ? remote.domains : state.domains,
     responses: (remote.responses && typeof remote.responses === "object") ? remote.responses : {}
   };
-  if (contestantTeamId && state.responses?.[contestantTeamId]) {
-    const rObj = state.responses[contestantTeamId];
-    if (rObj.questionId && state.activeQuestionId && rObj.questionId !== state.activeQuestionId) {
-      state.responses[contestantTeamId] = {
-        questionId: state.activeQuestionId,
-        answer: "",
-        shuffledOptions: [],
-        timeSec: null,
-        graded: false
-      };
-    } else if (!rObj.questionId && activeQBefore && state.activeQuestionId && activeQBefore !== state.activeQuestionId) {
-      state.responses[contestantTeamId] = {
-        questionId: state.activeQuestionId,
-        answer: "",
-        shuffledOptions: [],
-        timeSec: null,
-        graded: false
-      };
-    }
+  if (state.responses && typeof state.responses === "object") {
+    Object.keys(state.responses).forEach(tId => {
+      const rObj = state.responses[tId];
+      if (!rObj || typeof rObj !== "object") return;
+      const wrongQ = rObj.questionId && state.activeQuestionId && rObj.questionId !== state.activeQuestionId;
+      const wrongSess = rObj.sessionId && state.stageSessionId && rObj.sessionId !== state.stageSessionId;
+      const missingQOnSwitch = !rObj.questionId && activeQBefore && state.activeQuestionId && activeQBefore !== state.activeQuestionId;
+      if (wrongQ || wrongSess || missingQOnSwitch) {
+        state.responses[tId] = {
+          questionId: state.activeQuestionId,
+          sessionId: state.stageSessionId,
+          answer: "",
+          shuffledOptions: [],
+          timeSec: null,
+          graded: false
+        };
+      }
+    });
   }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -2722,17 +2775,23 @@ async function applyIncomingActions(pin, actionsObj) {
         mutated = true;
       }
     } else if (act.type === "BUZZ" && act.teamId) {
-      if (state.questionOpen && !state.buzzerLockedBy) {
+      const matchesQ = !act.questionId || !state.activeQuestionId || act.questionId === state.activeQuestionId;
+      const matchesSess = !act.sessionId || !state.stageSessionId || act.sessionId === state.stageSessionId;
+      if (matchesQ && matchesSess && state.activeQuestionId && !state.buzzerLockedBy) {
+        state.questionOpen = true;
         state.buzzerLockedBy = act.teamId;
         if (!state.responses) state.responses = {};
         state.responses[act.teamId] = {
-          ...(state.responses[act.teamId] || {}),
+          questionId: state.activeQuestionId,
+          sessionId: state.stageSessionId,
           answer: "BUZZ",
-          timeSec: act.timeSec ?? 0
+          shuffledOptions: [],
+          timeSec: act.timeSec ?? 0,
+          graded: false
         };
         const team = state.teams.find(t => t.id === act.teamId);
         if (team) team.lastFeedback = `🔔 ضغط الجرس أولاً (${act.timeSec ?? 0}ث)`;
-        playTone(980, 0.25, "square");
+        playBuzzerSound();
         mutated = true;
       }
     } else if (act.type === "ANSWER" && act.teamId) {
@@ -2867,6 +2926,9 @@ function getQuestionResponse(teamId, questionId) {
   if (r.questionId && r.questionId !== questionId) {
     return { questionId, answer: "", shuffledOptions: [], timeSec: null, graded: false };
   }
+  if (state.stageSessionId && r.sessionId && r.sessionId !== state.stageSessionId) {
+    return { questionId, answer: "", shuffledOptions: [], timeSec: null, graded: false };
+  }
   return r;
 }
 
@@ -2989,12 +3051,13 @@ function contestantAnswer(ans) {
 
 function contestantBuzz() {
   const teamId = getActiveContestantTeamId();
-  if (!teamId || !state.questionOpen || state.buzzerLockedBy) return;
+  if (!teamId || !state.activeQuestionId || state.buzzerLockedBy) return;
   const elapsed = state.questionStartTime ? Math.max(0.1, parseFloat(((Date.now() - state.questionStartTime) / 1000).toFixed(1))) : 0.5;
   state.buzzerLockedBy = teamId;
   if (!state.responses) state.responses = {};
   state.responses[teamId] = {
     questionId: state.activeQuestionId,
+    sessionId: state.stageSessionId,
     answer: "BUZZ",
     shuffledOptions: [],
     timeSec: elapsed,
@@ -3002,8 +3065,14 @@ function contestantBuzz() {
   };
   const team = state.teams.find(t => t.id === teamId);
   if (team) team.lastFeedback = `🔔 ضغط الجرس أولاً (${elapsed}ث)`;
-  playTone(980, 0.25, "square");
-  sendContestantAction(getTargetRoomPin(), { type: "BUZZ", teamId, timeSec: elapsed });
+  playBuzzerSound();
+  sendContestantAction(getTargetRoomPin(), {
+    type: "BUZZ",
+    teamId,
+    questionId: state.activeQuestionId,
+    sessionId: state.stageSessionId,
+    timeSec: elapsed
+  });
   renderContestantView();
 }
 
