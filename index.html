@@ -1094,7 +1094,7 @@ function triggerSupervisorBuzzerAlert(teamId, timeSec = null) {
   lastAlertedBuzzerKey = alertKey;
 
   const team = state.teams.find(t => t.id === teamId);
-  const tName = team ? team.name : `فريق (${teamId})`;
+  const tName = resolveTeamDisplayName(teamId, team?.name || "");
   const secStr = (timeSec !== null && timeSec !== undefined) ? ` (${timeSec} ثانية)` : "";
 
   const banner = document.getElementById("stageBuzzerBanner");
@@ -1512,7 +1512,7 @@ function renderStageLive() {
   if (state.buzzerLockedBy) {
     const buzTeam = state.teams.find(t => t.id === state.buzzerLockedBy);
     const buzResp = state.responses?.[state.buzzerLockedBy] || {};
-    const buzLabel = buzTeam ? buzTeam.name : `فريق (${state.buzzerLockedBy})`;
+    const buzLabel = resolveTeamDisplayName(state.buzzerLockedBy, buzTeam?.name || "");
     if (topBanner && topBannerText) {
       topBannerText.textContent = `⚡ الأسرع ضغطاً: ${buzLabel} (${buzResp.timeSec ?? "?"} ثانية)`;
       topBanner.classList.add("show");
@@ -1866,24 +1866,27 @@ function submitBuzzer(teamId) {
     const firstBuz = state.questions.find(item => item.type === "buzzer") || state.questions[0];
     if (firstBuz) state.activeQuestionId = firstBuz.id;
   }
+  const pressTs = Date.now();
   state.buzzerLockedBy = teamId;
-  const elapsed = state.questionStartTime ? Math.max(0.1, parseFloat(((Date.now() - state.questionStartTime) / 1000).toFixed(1))) : 0.4;
+  state.buzzerPressedAt = pressTs;
+  const elapsed = state.questionStartTime ? Math.max(0.01, parseFloat(((pressTs - state.questionStartTime) / 1000).toFixed(2))) : 0.1;
   if (!state.responses) state.responses = {};
   state.responses[teamId] = {
     questionId: state.activeQuestionId || "",
     sessionId: state.stageSessionId || "",
     answer: "⚡ ضغط أسرع",
     timeSec: elapsed,
+    pressTs,
     graded: false
   };
   const team = state.teams.find(t => t.id === teamId);
   if (team) team.lastFeedback = `⚡ الأسرع (${elapsed}ث)`;
-  saveState(true);
   renderAll();
   triggerSupervisorBuzzerAlert(teamId, elapsed);
   if (document.getElementById("stageModal")?.classList.contains("open")) {
     renderStageLive();
   }
+  saveState(true);
 }
 
 
@@ -2919,7 +2922,8 @@ function mergeRemoteState(remote, forceSync = false) {
     questionOpen: remote.questionOpen,
     timeExpired: remote.timeExpired,
     openAnswersRevealed: remote.openAnswersRevealed,
-    buzzerLockedBy: remote.buzzerLockedBy,
+    buzzerLockedBy: (state.buzzerLockedBy && (state.buzzerPressedAt || 0) > (remote.buzzerPressedAt || 0)) ? state.buzzerLockedBy : remote.buzzerLockedBy,
+    buzzerPressedAt: Math.max(state.buzzerPressedAt || 0, remote.buzzerPressedAt || 0),
     responses: remote.responses,
     teams: (remote.teams || []).map(t => ({ id: t.id, name: t.name, score: t.score, connected: t.connected, lastFeedback: t.lastFeedback }))
   });
@@ -2932,7 +2936,7 @@ function mergeRemoteState(remote, forceSync = false) {
     ...remote,
     activeQuestionId: remoteActiveQ,
     questionOpen: remoteQOpen,
-    teams: Array.isArray(remote.teams) ? remote.teams : state.teams,
+    teams: (Array.isArray(remote.teams) && remote.teams.length) ? remote.teams : state.teams,
     questions: Array.isArray(remote.questions) ? remote.questions : state.questions,
     domains: Array.isArray(remote.domains) ? remote.domains : state.domains,
     responses: (remote.responses && typeof remote.responses === "object") ? remote.responses : {}
@@ -3045,9 +3049,13 @@ async function applyIncomingActions(pin, actionsObj) {
       }
     } else if (act.type === "BUZZ" && act.teamId) {
       const targetQId = state.activeQuestionId || act.questionId || "";
-      if (!state.buzzerLockedBy && !state.timeExpired) {
+      const incomingTs = act.pressTs || act.ts || Date.now();
+      const existingWinnerTs = state.buzzerPressedAt || (state.buzzerLockedBy ? (state.responses?.[state.buzzerLockedBy]?.pressTs || Infinity) : Infinity);
+      const canClaim = (!state.buzzerLockedBy || incomingTs < existingWinnerTs) && !state.timeExpired;
+      if (canClaim) {
         if (targetQId) state.activeQuestionId = targetQId;
         state.buzzerLockedBy = act.teamId;
+        state.buzzerPressedAt = incomingTs;
         if (!state.responses) state.responses = {};
         state.responses[act.teamId] = {
           questionId: targetQId,
@@ -3055,6 +3063,7 @@ async function applyIncomingActions(pin, actionsObj) {
           answer: "⚡ ضغط أسرع",
           shuffledOptions: [],
           timeSec: act.timeSec ?? 0,
+          pressTs: incomingTs,
           graded: false
         };
         let team = state.teams.find(t => t.id === act.teamId);
@@ -3071,6 +3080,8 @@ async function applyIncomingActions(pin, actionsObj) {
             lastFeedback: ""
           };
           state.teams.push(team);
+        } else if (team && act.teamName && !/^t_[a-zA-Z0-9_]+$/.test(String(act.teamName).trim())) {
+          team.name = act.teamName.trim();
         }
         if (team) {
           team.connected = true;
@@ -3182,7 +3193,7 @@ function startSupervisorSyncLoop() {
       }
     } catch (e) {}
   };
-  supervisorPollTimer = setInterval(pollSup, 350);
+  supervisorPollTimer = setInterval(pollSup, 150);
 }
 
 function startRemoteSyncLoop(pin) {
@@ -3226,7 +3237,7 @@ function startRemoteSyncLoop(pin) {
       }
     }
   })();
-  firebasePollTimer = setInterval(() => poll(false), 600);
+  firebasePollTimer = setInterval(() => poll(false), 200);
 }
 
 function getQuestionResponse(teamId, questionId) {
@@ -3240,6 +3251,19 @@ function getQuestionResponse(teamId, questionId) {
     return { questionId, answer: "", shuffledOptions: [], timeSec: null, graded: false };
   }
   return r;
+}
+
+function resolveTeamDisplayName(teamId, fallbackName = "") {
+  if (fallbackName && !/^t_[a-zA-Z0-9_]+$/.test(String(fallbackName).trim())) {
+    return String(fallbackName).trim();
+  }
+  const found = (state.teams || []).find(t => t.id === teamId);
+  if (found && found.name) return found.name;
+  if (teamId === "t_1") return "فريق المسيرة";
+  if (teamId === "t_2") return "فريق الأمل";
+  if (teamId === "t_3") return "فريق التحدي";
+  if (teamId === "t_4") return "فريق النجاح";
+  return fallbackName || "فريق مشارك";
 }
 
 function renderContestantView() {
@@ -3299,8 +3323,9 @@ function renderContestantView() {
     const locked = Boolean(state.buzzerLockedBy);
     const isMe = team && state.buzzerLockedBy === team.id;
     const fastestTeam = locked ? state.teams.find(t => t.id === state.buzzerLockedBy) : null;
+    const fastestLabel = locked ? resolveTeamDisplayName(state.buzzerLockedBy, fastestTeam?.name || "") : "";
     bodyHtml += `
-      ${locked ? `<div style="padding:10px 12px; margin-bottom:10px; border-radius:10px; background:rgba(16,185,129,0.2); border:1px solid #10b981; font-weight:800; text-align:center;">⚡ الأسرع ضغطاً: ${escapeHtml(fastestTeam ? fastestTeam.name : state.buzzerLockedBy)}</div>` : ""}
+      ${locked ? `<div style="padding:10px 12px; margin-bottom:10px; border-radius:10px; background:rgba(16,185,129,0.2); border:1px solid #10b981; font-weight:800; text-align:center;">⚡ الأسرع ضغطاً: ${escapeHtml(fastestLabel)}</div>` : ""}
       <button type="button" class="buzzer-big-btn" ${locked || !team ? "disabled" : ""} onclick="contestantBuzz()">
         ${isMe ? "⚡ أنت الأسرع!" : locked ? "⚡ تم تسجيل الأسرع" : "⚡ اضغط الآن!"}
       </button>
@@ -3375,9 +3400,11 @@ function contestantBuzz() {
   const teamId = getActiveContestantTeamId();
   if (!teamId || state.buzzerLockedBy || state.timeExpired) return;
   const qId = state.activeQuestionId || ((state.questions.find(item => item.type === "buzzer") || state.questions[0] || {}).id) || "";
-  const elapsed = state.questionStartTime ? Math.max(0.1, parseFloat(((Date.now() - state.questionStartTime) / 1000).toFixed(1))) : 0.4;
+  const elapsed = state.questionStartTime ? Math.max(0.01, parseFloat(((Date.now() - state.questionStartTime) / 1000).toFixed(2))) : 0.1;
+  const pressTs = Date.now();
   state.activeQuestionId = qId;
   state.buzzerLockedBy = teamId;
+  state.buzzerPressedAt = pressTs;
   if (!state.responses) state.responses = {};
   state.responses[teamId] = {
     questionId: qId,
@@ -3385,19 +3412,24 @@ function contestantBuzz() {
     answer: "⚡ ضغط أسرع",
     shuffledOptions: (state.responses[teamId] && state.responses[teamId].questionId === qId) ? (state.responses[teamId].shuffledOptions || []) : [],
     timeSec: elapsed,
+    pressTs,
     graded: false
   };
   const team = state.teams.find(t => t.id === teamId);
-  if (team) team.lastFeedback = `⚡ الأسرع (${elapsed}ث)`;
+  if (team) {
+    team.connected = true;
+    team.lastFeedback = `⚡ الأسرع (${elapsed}ث)`;
+  }
+  renderContestantView();
   sendContestantAction(getTargetRoomPin(), {
     type: "BUZZ",
     teamId,
     teamName: team ? team.name : "",
     questionId: qId,
     sessionId: state.stageSessionId || "",
-    timeSec: elapsed
+    timeSec: elapsed,
+    pressTs
   });
-  renderContestantView();
 }
 
 if (channel) {
