@@ -1540,8 +1540,10 @@ function renderStageLive() {
     const chip = document.createElement("div");
     chip.className = "resp-chip" + (r.answer ? " answered" : "") + (isBuzzed ? " buzzed" : "");
     let detail = "⏳ يفكر...";
-    if (q.type === "buzzer") {
-      detail = isBuzzed ? `🔔 ضغط أولاً (${r.timeSec || "?"}ث)` : (state.buzzerLockedBy ? "🔒 مقفل" : "⏳ جاهز للجرس");
+    if (isBuzzed || r.answer === "🔔" || r.answer === "BUZZ") {
+      detail = `🔔 (${r.timeSec ?? "?"}ث)`;
+    } else if (q.type === "buzzer") {
+      detail = state.buzzerLockedBy ? "🔒 مقفل" : "⏳ جاهز للجرس";
     } else if (r.answer) {
       if (q.type === "qcm") {
         detail = `✅ أجاب (${r.timeSec}ث)${document.getElementById("stageAnswerReveal").classList.contains("show") ? " : " + r.answer : ""}`;
@@ -1855,25 +1857,25 @@ function submitBuzzer(teamId) {
     const firstBuz = state.questions.find(item => item.type === "buzzer") || state.questions[0];
     if (firstBuz) state.activeQuestionId = firstBuz.id;
   }
-  state.questionOpen = true;
   state.buzzerLockedBy = teamId;
+  stopTimer();
   const elapsed = state.questionStartTime ? Math.max(0.1, parseFloat(((Date.now() - state.questionStartTime) / 1000).toFixed(1))) : 0.4;
   if (!state.responses) state.responses = {};
   state.responses[teamId] = {
     questionId: state.activeQuestionId || "",
     sessionId: state.stageSessionId || "",
-    answer: "BUZZ",
+    answer: "🔔",
     timeSec: elapsed,
     graded: false
   };
   const team = state.teams.find(t => t.id === teamId);
-  if (team) team.lastFeedback = `🔔 ضغط الجرس أولاً (${elapsed}ث)`;
-  playBuzzerSound();
+  if (team) team.lastFeedback = `🔔 (${elapsed}ث)`;
   saveState(true);
   renderAll();
   if (document.getElementById("stageModal")?.classList.contains("open")) {
     renderStageLive();
   }
+  playBuzzerSound();
 }
 
 
@@ -3037,13 +3039,13 @@ async function applyIncomingActions(pin, actionsObj) {
       const targetQId = state.activeQuestionId || act.questionId || "";
       if (!state.buzzerLockedBy && !state.timeExpired) {
         if (targetQId) state.activeQuestionId = targetQId;
-        state.questionOpen = true;
         state.buzzerLockedBy = act.teamId;
+        stopTimer();
         if (!state.responses) state.responses = {};
         state.responses[act.teamId] = {
           questionId: targetQId,
           sessionId: act.sessionId || state.stageSessionId || "",
-          answer: "BUZZ",
+          answer: "🔔",
           shuffledOptions: [],
           timeSec: act.timeSec ?? 0,
           graded: false
@@ -3065,7 +3067,7 @@ async function applyIncomingActions(pin, actionsObj) {
         }
         if (team) {
           team.connected = true;
-          team.lastFeedback = `🔔 ضغط الجرس أولاً (${act.timeSec ?? 0}ث)`;
+          team.lastFeedback = `🔔 (${act.timeSec ?? 0}ث)`;
         }
         playBuzzerSound();
         mutated = true;
@@ -3354,31 +3356,23 @@ function contestantAnswer(ans) {
 
 function contestantBuzz() {
   const teamId = getActiveContestantTeamId();
-  if (!teamId) {
-    showToast("يرجى كتابة اسم فريقك وتأكيده أولاً");
-    return;
-  }
-  if (state.buzzerLockedBy) {
-    showToast("تم قفل الجرس مسبقاً لفريق آخر");
-    return;
-  }
+  if (!teamId || state.buzzerLockedBy || state.timeExpired) return;
   const qId = state.activeQuestionId || ((state.questions.find(item => item.type === "buzzer") || state.questions[0] || {}).id) || "";
   const elapsed = state.questionStartTime ? Math.max(0.1, parseFloat(((Date.now() - state.questionStartTime) / 1000).toFixed(1))) : 0.4;
   state.activeQuestionId = qId;
-  state.questionOpen = true;
   state.buzzerLockedBy = teamId;
+  stopTimer();
   if (!state.responses) state.responses = {};
   state.responses[teamId] = {
     questionId: qId,
     sessionId: state.stageSessionId || "",
-    answer: "BUZZ",
-    shuffledOptions: [],
+    answer: "🔔",
+    shuffledOptions: (state.responses[teamId] && state.responses[teamId].questionId === qId) ? (state.responses[teamId].shuffledOptions || []) : [],
     timeSec: elapsed,
     graded: false
   };
   const team = state.teams.find(t => t.id === teamId);
-  if (team) team.lastFeedback = `🔔 ضغط الجرس أولاً (${elapsed}ث)`;
-  playBuzzerSound();
+  if (team) team.lastFeedback = `🔔 (${elapsed}ث)`;
   sendContestantAction(getTargetRoomPin(), {
     type: "BUZZ",
     teamId,
@@ -3388,6 +3382,7 @@ function contestantBuzz() {
     timeSec: elapsed
   });
   renderContestantView();
+  playBuzzerSound();
 }
 
 if (channel) {
