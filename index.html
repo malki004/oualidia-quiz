@@ -1193,7 +1193,7 @@ function renderDomains() {
         ${qs.map((q, i) => `
           <div class="q-item ${q.done ? "done" : ""}">
             <div style="flex:1;">
-              <div class="q-text"><strong>${i + 1}.</strong> ${escapeHtml(q.text)}</div>
+              <div class="q-text"><strong>${i + 1}.</strong> ${escapeHtml(sanitizeExcelCell(q.text))}</div>
               <div class="q-badges">
                 <span class="pill">${typeLabel(q.type)}</span>
                 <span class="pill">${q.points} ن</span>
@@ -1519,7 +1519,7 @@ function renderStageLive() {
           : `🔒 تم إرسال الإجابة (${r.timeSec}ث) — مخفية حتى انتهاء الوقت`;
       }
     }
-    chip.innerHTML = `<strong>${escapeHtml(t.name)}</strong><br><span style="font-size:0.78rem; color:var(--text-muted);">${escapeHtml(detail)}</span>`;
+    chip.innerHTML = `<strong>${escapeHtml(sanitizeExcelCell(t.name))}</strong><br><span style="font-size:0.78rem; color:var(--text-muted);">${escapeHtml(detail)}</span>`;
     chipsWrap.appendChild(chip);
   });
 }
@@ -1701,7 +1701,7 @@ function renderSim() {
   let html = `
     <label style="margin-top:0;">اختر الفريق على الهاتف:</label>
     <select onchange="simTeamId = this.value; renderSim();">
-      ${state.teams.map(t => `<option value="${t.id}" ${t.id === team.id ? "selected" : ""}>${escapeHtml(t.name)} (${t.score} ن)</option>`).join("")}
+      ${state.teams.map(t => `<option value="${t.id}" ${t.id === team.id ? "selected" : ""}>${escapeHtml(sanitizeExcelCell(t.name))} (${t.score} ن)</option>`).join("")}
     </select>
     <div style="margin:8px 0; font-size:0.82rem; color:var(--text-muted);">
       الحالة: <strong style="color:var(--accent-2);">${escapeHtml(team.lastFeedback || "متصل بالغرفة " + state.pin)}</strong>
@@ -1716,7 +1716,7 @@ function renderSim() {
     const locked = Boolean(state.buzzerLockedBy);
     const isMe = state.buzzerLockedBy === team.id;
     html += `
-      <div style="font-weight:700; margin-bottom:10px;">${escapeHtml(q.text)}</div>
+      <div style="font-weight:700; margin-bottom:10px;">${escapeHtml(sanitizeExcelCell(q.text))}</div>
       <button class="buzzer-big-btn" ${locked ? "disabled" : ""} onclick="submitBuzzer('${team.id}')">
         ${isMe ? "🔔 أنت الأسرع!" : locked ? "🔒 تم قفل الجرس" : "🔔 اضغط للإجابة الآن!"}
       </button>
@@ -1725,7 +1725,7 @@ function renderSim() {
     const opts = resp.shuffledOptions && resp.shuffledOptions.length ? resp.shuffledOptions : q.options;
     const canEditSim = Boolean(state.questionOpen && !state.timeExpired);
     const editingSim = Boolean(window._editingSimAnswer && canEditSim);
-    html += `<div style="font-weight:700; margin-bottom:10px;">${escapeHtml(q.text)}</div>`;
+    html += `<div style="font-weight:700; margin-bottom:10px;">${escapeHtml(sanitizeExcelCell(q.text))}</div>`;
     if (resp.answer && !editingSim) {
       html += `<div style="padding:12px; background:rgba(16,185,129,0.2); border-radius:10px; text-align:center;">
         ✅ تم تسجيل إجابتك: <strong>${escapeHtml(resp.answer)}</strong>
@@ -1741,7 +1741,7 @@ function renderSim() {
   } else {
     const canEditSim = Boolean(state.questionOpen && !state.timeExpired);
     const editingSim = Boolean(window._editingSimAnswer && canEditSim);
-    html += `<div style="font-weight:700; margin-bottom:10px;">${escapeHtml(q.text)}</div>`;
+    html += `<div style="font-weight:700; margin-bottom:10px;">${escapeHtml(sanitizeExcelCell(q.text))}</div>`;
     if (resp.answer && !editingSim) {
       html += `<div style="padding:12px; background:rgba(16,185,129,0.2); border-radius:10px; text-align:center;">
         ✅ تم إرسال إجابتك: <strong>${escapeHtml(resp.answer)}</strong>
@@ -2430,8 +2430,8 @@ function exportQuestionsExcel() {
     <tr>
       <td>${escapeHtml(q.domain)}</td>
       <td>${escapeHtml(q.type)}</td>
-      <td>${escapeHtml(q.text)}</td>
-      <td>${escapeHtml(q.answer || "")}</td>
+      <td>${escapeHtml(sanitizeExcelCell(q.text))}</td>
+      <td>${escapeHtml(sanitizeExcelCell(q.answer || ""))}</td>
       <td>${q.points || 2}</td>
       <td>${escapeHtml(q.options?.[0] || "")}</td>
       <td>${escapeHtml(q.options?.[1] || "")}</td>
@@ -2642,6 +2642,13 @@ function escapeHtml(s) {
 function escapeJs(s) {
   return String(s ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
+function sanitizeExcelCell(val) {
+  const str = String(val ?? "");
+  if (/^[=+\-@\t\r]/.test(str)) {
+    return "'" + str;
+  }
+  return str;
+}
 
 /* Contestant Simplified Mode & Live Sync */
 let isContestantView = false;
@@ -2837,9 +2844,13 @@ function mergeRemoteState(remote, forceSync = false) {
   });
 
   const activeQBefore = state.activeQuestionId;
+  const remoteActiveQ = Object.prototype.hasOwnProperty.call(remote, "activeQuestionId") ? remote.activeQuestionId : state.activeQuestionId;
+  const remoteQOpen = Object.prototype.hasOwnProperty.call(remote, "questionOpen") ? Boolean(remote.questionOpen) : Boolean(state.questionOpen);
   state = {
     ...state,
     ...remote,
+    activeQuestionId: remoteActiveQ,
+    questionOpen: remoteQOpen,
     teams: Array.isArray(remote.teams) ? remote.teams : state.teams,
     questions: Array.isArray(remote.questions) ? remote.questions : state.questions,
     domains: Array.isArray(remote.domains) ? remote.domains : state.domains,
@@ -2988,14 +2999,16 @@ async function applyIncomingActions(pin, actionsObj) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(state)
         });
-        await fetch(`${base}/quiz_rooms/${pin}/actions.json`, { method: "DELETE" });
       } catch (e) {}
     }
-  } else if (getEffectiveFirebaseUrl()) {
+  }
+  if (getEffectiveFirebaseUrl()) {
     const base = getEffectiveFirebaseUrl().replace(/\/+$/, "");
-    try {
-      await fetch(`${base}/quiz_rooms/${pin}/actions.json`, { method: "DELETE" });
-    } catch (e) {}
+    for (const [actKey] of entries) {
+      try {
+        await fetch(`${base}/quiz_rooms/${pin}/actions/${encodeURIComponent(actKey)}.json`, { method: "DELETE" });
+      } catch (e) {}
+    }
   }
 
   return mutated;
@@ -3064,6 +3077,9 @@ function startRemoteSyncLoop(pin) {
         const prevQ = state.activeQuestionId;
         const prevOpen = state.questionOpen;
         const prevSession = state.stageSessionId;
+        if (!remote.questionOpen && !remote.buzzerLockedBy && !force) {
+          remote.activeQuestionId = null;
+        }
         const changed = mergeRemoteState(remote, force);
         const stageChanged = (prevQ !== state.activeQuestionId) || (prevOpen !== state.questionOpen) || (prevSession !== state.stageSessionId);
         if (remote.contestantModeEnabled === false) {
@@ -3075,7 +3091,21 @@ function startRemoteSyncLoop(pin) {
     }
   };
   renderContestantView();
-  poll(true);
+  (async () => {
+    if (!isContestantView || !getEffectiveFirebaseUrl()) return;
+    const remote = await fetchRemoteRoomSnapshot(pin);
+    if (remote) {
+      if (!remote.questionOpen && !remote.buzzerLockedBy) {
+        remote.activeQuestionId = null;
+      }
+      mergeRemoteState(remote, true);
+      if (remote.contestantModeEnabled === false) {
+        exitContestantMode(false);
+      } else {
+        renderContestantView();
+      }
+    }
+  })();
   firebasePollTimer = setInterval(() => poll(false), 1200);
 }
 
@@ -3128,21 +3158,22 @@ function renderContestantView() {
   }
 
   const stage = document.getElementById("cStageArea");
-  const q = state.activeQuestionId ? state.questions.find(item => item.id === state.activeQuestionId) : null;
+  const hasActiveStageQuestion = Boolean(state.activeQuestionId && (state.questionOpen || state.buzzerLockedBy));
+  const q = hasActiveStageQuestion ? state.questions.find(item => item.id === state.activeQuestionId) : null;
   const resp = (team && q) ? getQuestionResponse(team.id, q.id) : {};
 
-  if (!q || (!state.questionOpen && !(q.type === "buzzer" && !state.buzzerLockedBy))) {
+  if (!q || (!state.questionOpen && q.type !== "buzzer")) {
     stage.innerHTML = `
       <div style="text-align:center; padding:26px 14px; background:var(--bg-card-2); border-radius:14px;">
         <div style="font-size:1.6rem; margin-bottom:8px;">⏳</div>
         <div style="font-weight:700;">في انتظار فتح السؤال من شاشة المسابقة...</div>
-        <div style="font-size:0.82rem; color:var(--text-muted); margin-top:6px;">${escapeHtml(team?.lastFeedback || "تأكد من اختيار فريقك أعلاه")}</div>
+        <div style="font-size:0.82rem; color:var(--text-muted); margin-top:6px;">${escapeHtml(team?.lastFeedback || "تأكد من كتابة اسم فريقك وتأكيده أعلاه")}</div>
       </div>
     `;
     return;
   }
 
-  let bodyHtml = `<div class="contestant-q">${escapeHtml(q.text)}</div>`;
+  let bodyHtml = `<div class="contestant-q">${escapeHtml(sanitizeExcelCell(q.text))}</div>`;
 
   if (q.type === "buzzer") {
     const locked = Boolean(state.buzzerLockedBy);
@@ -3257,6 +3288,20 @@ if (channel) {
     }
   };
 }
+
+document.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape") {
+    const openModals = [...document.querySelectorAll(".modal-backdrop.open")];
+    if (openModals.length) {
+      const topModal = openModals[openModals.length - 1];
+      if (topModal.id === "stageModal") {
+        closeStageModal();
+      } else {
+        topModal.classList.remove("open");
+      }
+    }
+  }
+});
 
 renderAll();
 detectContestantMode();
