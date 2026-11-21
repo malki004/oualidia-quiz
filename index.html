@@ -1514,12 +1514,12 @@ function renderStageLive() {
     const buzResp = state.responses?.[state.buzzerLockedBy] || {};
     const buzLabel = buzTeam ? buzTeam.name : `فريق (${state.buzzerLockedBy})`;
     if (topBanner && topBannerText) {
-      topBannerText.textContent = `🔔 الأسرع على الجرس: ${buzLabel} (${buzResp.timeSec ?? "?"} ثانية)`;
+      topBannerText.textContent = `⚡ الأسرع ضغطاً: ${buzLabel} (${buzResp.timeSec ?? "?"} ثانية)`;
       topBanner.classList.add("show");
     }
     const banner = document.createElement("div");
-    banner.style.cssText = "width:100%; padding:12px 14px; border-radius:10px; background:rgba(239,68,68,0.22); border:2px solid #ef4444; font-weight:800; font-size:1rem; margin-bottom:8px;";
-    banner.textContent = `🔔 الأسرع على الجرس: ${buzLabel} (${buzResp.timeSec ?? "?"} ثانية)`;
+    banner.style.cssText = "width:100%; padding:12px 14px; border-radius:10px; background:rgba(16,185,129,0.2); border:2px solid #10b981; font-weight:800; font-size:1rem; margin-bottom:8px;";
+    banner.textContent = `⚡ الأسرع ضغطاً: ${buzLabel} (${buzResp.timeSec ?? "?"} ثانية)`;
     chipsWrap.appendChild(banner);
   } else if (topBanner) {
     topBanner.classList.remove("show");
@@ -1549,10 +1549,10 @@ function renderStageLive() {
     const chip = document.createElement("div");
     chip.className = "resp-chip" + (r.answer ? " answered" : "") + (isBuzzed ? " buzzed" : "");
     let detail = "⏳ يفكر...";
-    if (isBuzzed || r.answer === "🔔" || r.answer === "BUZZ") {
-      detail = `🔔 (${r.timeSec ?? "?"}ث)`;
+    if (isBuzzed || r.answer === "⚡ ضغط أسرع" || r.answer === "🔔" || r.answer === "BUZZ") {
+      detail = `⚡ الأسرع (${r.timeSec ?? "?"}ث)`;
     } else if (q.type === "buzzer") {
-      detail = state.buzzerLockedBy ? "🔒 مقفل" : "⏳ جاهز للجرس";
+      detail = state.buzzerLockedBy ? "🔒 تم اختيار الأسرع" : "⏳ جاهز للضغط";
     } else if (r.answer) {
       if (q.type === "qcm") {
         detail = `✅ أجاب (${r.timeSec}ث)${document.getElementById("stageAnswerReveal").classList.contains("show") ? " : " + r.answer : ""}`;
@@ -3182,7 +3182,7 @@ function startSupervisorSyncLoop() {
       }
     } catch (e) {}
   };
-  supervisorPollTimer = setInterval(pollSup, 900);
+  supervisorPollTimer = setInterval(pollSup, 350);
 }
 
 function startRemoteSyncLoop(pin) {
@@ -3226,7 +3226,7 @@ function startRemoteSyncLoop(pin) {
       }
     }
   })();
-  firebasePollTimer = setInterval(() => poll(false), 1200);
+  firebasePollTimer = setInterval(() => poll(false), 600);
 }
 
 function getQuestionResponse(teamId, questionId) {
@@ -3298,9 +3298,11 @@ function renderContestantView() {
   if (q.type === "buzzer") {
     const locked = Boolean(state.buzzerLockedBy);
     const isMe = team && state.buzzerLockedBy === team.id;
+    const fastestTeam = locked ? state.teams.find(t => t.id === state.buzzerLockedBy) : null;
     bodyHtml += `
+      ${locked ? `<div style="padding:10px 12px; margin-bottom:10px; border-radius:10px; background:rgba(16,185,129,0.2); border:1px solid #10b981; font-weight:800; text-align:center;">⚡ الأسرع ضغطاً: ${escapeHtml(fastestTeam ? fastestTeam.name : state.buzzerLockedBy)}</div>` : ""}
       <button type="button" class="buzzer-big-btn" ${locked || !team ? "disabled" : ""} onclick="contestantBuzz()">
-        ${isMe ? "🔔 أنت الأسرع!" : locked ? "🔒 تم قفل الجرس" : "🔔 اضغط للإجابة الآن!"}
+        ${isMe ? "⚡ أنت الأسرع!" : locked ? "⚡ تم تسجيل الأسرع" : "⚡ اضغط الآن!"}
       </button>
     `;
   } else if (q.type === "qcm") {
@@ -3376,18 +3378,17 @@ function contestantBuzz() {
   const elapsed = state.questionStartTime ? Math.max(0.1, parseFloat(((Date.now() - state.questionStartTime) / 1000).toFixed(1))) : 0.4;
   state.activeQuestionId = qId;
   state.buzzerLockedBy = teamId;
-  stopTimer();
   if (!state.responses) state.responses = {};
   state.responses[teamId] = {
     questionId: qId,
     sessionId: state.stageSessionId || "",
-    answer: "🔔",
+    answer: "⚡ ضغط أسرع",
     shuffledOptions: (state.responses[teamId] && state.responses[teamId].questionId === qId) ? (state.responses[teamId].shuffledOptions || []) : [],
     timeSec: elapsed,
     graded: false
   };
   const team = state.teams.find(t => t.id === teamId);
-  if (team) team.lastFeedback = `🔔 (${elapsed}ث)`;
+  if (team) team.lastFeedback = `⚡ الأسرع (${elapsed}ث)`;
   sendContestantAction(getTargetRoomPin(), {
     type: "BUZZ",
     teamId,
