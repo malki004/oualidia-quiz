@@ -1026,6 +1026,14 @@ function loadState() {
   return createDefaultState();
 }
 
+let _firebasePushTimer = null;
+function flushFirebaseSync() {
+  clearTimeout(_firebasePushTimer);
+  _firebasePushTimer = null;
+  if (getEffectiveFirebaseUrl() && (state.syncMode === "firebase" || !state.syncMode)) {
+    syncToFirebase();
+  }
+}
 function saveState(broadcast = true) {
   stampStateChange();
   try {
@@ -1034,7 +1042,11 @@ function saveState(broadcast = true) {
   if (broadcast) {
     if (channel) channel.postMessage({ type: "STATE_UPDATE", state });
     if (getEffectiveFirebaseUrl() && (state.syncMode === "firebase" || !state.syncMode)) {
-      syncToFirebase();
+      clearTimeout(_firebasePushTimer);
+      _firebasePushTimer = setTimeout(() => {
+        _firebasePushTimer = null;
+        syncToFirebase();
+      }, 90);
     }
   }
   renderSim();
@@ -1429,6 +1441,7 @@ function useAudienceJoker(teamId) {
   if (!team || team.jokers.audience) return;
   team.jokers.audience = true;
   adjustTimer(15);
+  saveState(true);
   showToast(`${team.name} طلب مساعدة الجمهور (+15 ثانية)`);
   renderTeams();
 }
@@ -3207,10 +3220,28 @@ async function pushContestantUpdate(pin) {
 }
 
 let supervisorPollTimer = null;
+let _supPollBusy = false;
+let _pendingRenderRaf = null;
+
+function scheduleRenderAll(forceStage = false) {
+  if (_pendingRenderRaf !== null) return;
+  _pendingRenderRaf = requestAnimationFrame(() => {
+    _pendingRenderRaf = null;
+    renderAll();
+    renderSim();
+    if (forceStage || document.getElementById("stageModal")?.classList.contains("open")) {
+      renderStageLive();
+    }
+  });
+}
+
 function startSupervisorSyncLoop() {
   clearInterval(supervisorPollTimer);
   const pollSup = async () => {
-    if (isContestantView || !getEffectiveFirebaseUrl()) return;
+    if (_supPollBusy || isContestantView || !getEffectiveFirebaseUrl()) return;
+    if (state.syncMode && state.syncMode !== "firebase") return;
+    if (Date.now() - (lastLocalWriteTs || 0) < 180) return;
+    _supPollBusy = true;
     const base = getEffectiveFirebaseUrl().replace(/\/+$/, "");
     try {
       const actRes = await fetch(`${base}/quiz_rooms/${state.pin}/actions.json`, { cache: "no-store" });
@@ -3218,8 +3249,7 @@ function startSupervisorSyncLoop() {
         const actionsObj = await actRes.json();
         const hadActions = await applyIncomingActions(state.pin, actionsObj);
         if (hadActions) {
-          renderAll();
-          renderSim();
+          scheduleRenderAll();
           return;
         }
       }
@@ -3234,17 +3264,15 @@ function startSupervisorSyncLoop() {
             triggerSupervisorBuzzerAlert(state.buzzerLockedBy, bSec);
           }
           if (changed) {
-            renderAll();
-            renderSim();
-            if (document.getElementById("stageModal")?.classList.contains("open")) {
-              renderStageLive();
-            }
+            scheduleRenderAll();
           }
         }
       }
-    } catch (e) {}
+    } catch (e) {} finally {
+      _supPollBusy = false;
+    }
   };
-  supervisorPollTimer = setInterval(pollSup, 150);
+  supervisorPollTimer = setInterval(pollSup, 250);
 }
 
 function startRemoteSyncLoop(pin) {
@@ -3515,6 +3543,20 @@ document.addEventListener("keydown", (ev) => {
     }
   }
 });
+
+const teamsGridEl = document.getElementById("teamsGrid");
+if (teamsGridEl && !teamsGridEl._delegatedBound) {
+  teamsGridEl._delegatedBound = true;
+  teamsGridEl.addEventListener("click", (ev) => {
+    const btn = ev.target.closest("button[onclick], [data-quick-score]");
+    if (!btn) return;
+    if (btn.hasAttribute("data-quick-score")) {
+      const tid = btn.getAttribute("data-quick-score");
+      const dlt = Number(btn.getAttribute("data-delta") || 1);
+      adjustScore(tid, dlt);
+    }
+  });
+}
 
 renderAll();
 detectContestantMode();
