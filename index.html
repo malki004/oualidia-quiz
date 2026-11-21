@@ -2653,17 +2653,43 @@ function getTargetRoomPin() {
   return params.get("join") || state.pin;
 }
 
+async function fetchRemoteRoomSnapshot(pin) {
+  if (!pin || !getEffectiveFirebaseUrl()) return null;
+  const base = getEffectiveFirebaseUrl().replace(/\/+$/, "");
+  try {
+    const res = await fetch(`${base}/quiz_rooms/${pin}.json`, { cache: "no-store" });
+    if (!res.ok) return null;
+    const remote = await res.json();
+    if (!remote || typeof remote !== "object") return null;
+    return remote;
+  } catch (e) {
+    return null;
+  }
+}
+
 function detectContestantMode() {
   const params = new URLSearchParams(window.location.search);
   const joinPin = params.get("join");
   const role = params.get("role");
   const enabledBySupervisor = (state.contestantModeEnabled !== false);
-  if ((joinPin || role === "contestant") && enabledBySupervisor) {
+  if (joinPin || role === "contestant") {
     isContestantView = true;
     const pin = joinPin || state.pin;
+    if (joinPin) state.pin = joinPin;
     const savedTeam = localStorage.getItem("oualidia_qr_registered_team_" + pin) || localStorage.getItem("oualidia_contestant_team_" + pin);
     contestantTeamId = savedTeam || null;
     document.body.classList.add("contestant-mode");
+    if (!enabledBySupervisor) {
+      // Still fetch latest remote state first in case supervisor enabled it remotely
+      fetchRemoteRoomSnapshot(pin).then(remote => {
+        if (remote && remote.contestantModeEnabled !== false) {
+          mergeRemoteState(remote);
+          renderContestantView();
+        } else {
+          exitContestantMode(false);
+        }
+      });
+    }
     startRemoteSyncLoop(pin);
     renderContestantView();
   } else {
@@ -2786,9 +2812,9 @@ function stampStateChange() {
   state.updatedAt = lastLocalWriteTs;
 }
 
-function mergeRemoteState(remote) {
+function mergeRemoteState(remote, forceSync = false) {
   if (!remote || typeof remote !== "object") return false;
-  if (typeof remote.updatedAt === "number" && remote.updatedAt < lastLocalWriteTs - 300) {
+  if (!forceSync && typeof remote.updatedAt === "number" && remote.updatedAt < lastLocalWriteTs - 300) {
     return false;
   }
   const localSig = JSON.stringify({
@@ -3028,33 +3054,29 @@ function startSupervisorSyncLoop() {
 
 function startRemoteSyncLoop(pin) {
   clearInterval(firebasePollTimer);
-  const poll = async () => {
+  const poll = async (force = false) => {
     if (!isContestantView) return;
-    // Do not interrupt active typing on mobile inputs
     const activeEl = document.activeElement;
-    if (activeEl && (activeEl.id === "cCustomTeamInput" || activeEl.id === "cOpenAnswerInput")) {
-      return;
-    }
+    const isTyping = Boolean(activeEl && (activeEl.id === "cCustomTeamInput" || activeEl.id === "cOpenAnswerInput"));
     if (getEffectiveFirebaseUrl()) {
-      const base = getEffectiveFirebaseUrl().replace(/\/+$/, "");
-      try {
-        const res = await fetch(`${base}/quiz_rooms/${pin}.json`, { cache: "no-store" });
-        if (res.ok) {
-          const remote = await res.json();
-          if (remote && typeof remote === "object") {
-            const changed = mergeRemoteState(remote);
-            if (remote.contestantModeEnabled === false) {
-              exitContestantMode(false);
-            } else if (changed) {
-              renderContestantView();
-            }
-          }
+      const remote = await fetchRemoteRoomSnapshot(pin);
+      if (remote) {
+        const prevQ = state.activeQuestionId;
+        const prevOpen = state.questionOpen;
+        const prevSession = state.stageSessionId;
+        const changed = mergeRemoteState(remote, force);
+        const stageChanged = (prevQ !== state.activeQuestionId) || (prevOpen !== state.questionOpen) || (prevSession !== state.stageSessionId);
+        if (remote.contestantModeEnabled === false) {
+          exitContestantMode(false);
+        } else if ((changed || stageChanged || force) && !isTyping) {
+          renderContestantView();
         }
-      } catch (e) {}
+      }
     }
   };
   renderContestantView();
-  firebasePollTimer = setInterval(poll, 1500);
+  poll(true);
+  firebasePollTimer = setInterval(() => poll(false), 1200);
 }
 
 function getQuestionResponse(teamId, questionId) {
@@ -3106,10 +3128,10 @@ function renderContestantView() {
   }
 
   const stage = document.getElementById("cStageArea");
-  const q = state.questions.find(item => item.id === state.activeQuestionId);
+  const q = state.activeQuestionId ? state.questions.find(item => item.id === state.activeQuestionId) : null;
   const resp = (team && q) ? getQuestionResponse(team.id, q.id) : {};
 
-  if (!q || (!state.questionOpen && q.type !== "buzzer")) {
+  if (!q || (!state.questionOpen && !(q.type === "buzzer" && !state.buzzerLockedBy))) {
     stage.innerHTML = `
       <div style="text-align:center; padding:26px 14px; background:var(--bg-card-2); border-radius:14px;">
         <div style="font-size:1.6rem; margin-bottom:8px;">⏳</div>
