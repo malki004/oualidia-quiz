@@ -932,7 +932,7 @@
     <div class="contestant-header">
       <div>
         <div style="font-weight:800; font-size:1.05rem;" id="cSchoolTitle">ثانوية الوليدية الإعدادية</div>
-        <div style="font-size:0.8rem; color:var(--text-muted);">غرفة: <strong id="cPinBadge">----</strong> · <span id="cSyncStatus">🟢 متصل</span></div>
+        <div style="font-size:0.8rem; color:var(--text-muted);">غرفة: <strong id="cPinBadge">----</strong> · <span id="cSyncStatus">🟢 متصل</span> · <span style="opacity:0.75;">v7.21</span></div>
       </div>
       <span class="pill" style="font-size:0.72rem;">واجهة المتسابق</span>
     </div>
@@ -1272,16 +1272,23 @@ function quickDeleteTeam(teamId) {
   if (!team) return;
   if (!confirm(`هل تريد حذف الفريق «${team.name}» من القائمة؟`)) return;
   state.teams = state.teams.filter(t => t.id !== teamId);
+  state.qualifiedTeams = (state.qualifiedTeams || []).filter(id => id !== teamId);
   if (state.responses && state.responses[teamId]) {
     delete state.responses[teamId];
   }
   if (state.buzzerLockedBy === teamId) {
     state.buzzerLockedBy = null;
+    state.buzzerPressedAt = null;
   }
   if (simTeamId === teamId) {
     simTeamId = state.teams[0] ? state.teams[0].id : null;
   }
-  saveState();
+  // Purge deleted team on Firebase immediately so polling doesn't resurrect it
+  if (getEffectiveFirebaseUrl() && state.pin) {
+    const base = getEffectiveFirebaseUrl().replace(/\/+$/, "");
+    fetch(`${base}/quiz_rooms/${state.pin}/responses/${encodeURIComponent(teamId)}.json`, { method: "DELETE" }).catch(() => {});
+  }
+  saveState(true);
   renderAll();
   showToast("تم حذف الفريق");
 }
@@ -2922,8 +2929,10 @@ function mergeRemoteState(remote, forceSync = false) {
     questionOpen: remote.questionOpen,
     timeExpired: remote.timeExpired,
     openAnswersRevealed: remote.openAnswersRevealed,
-    buzzerLockedBy: (state.buzzerLockedBy && (state.buzzerPressedAt || 0) > (remote.buzzerPressedAt || 0)) ? state.buzzerLockedBy : remote.buzzerLockedBy,
-    buzzerPressedAt: Math.max(state.buzzerPressedAt || 0, remote.buzzerPressedAt || 0),
+    buzzerLockedBy: (window._localBuzzLock && Date.now() < window._localBuzzLock.until && (!remote.buzzerPressedAt || remote.buzzerPressedAt <= window._localBuzzLock.pressTs))
+      ? window._localBuzzLock.teamId
+      : ((state.buzzerLockedBy && (state.buzzerPressedAt || 0) > (remote.buzzerPressedAt || 0)) ? state.buzzerLockedBy : remote.buzzerLockedBy),
+    buzzerPressedAt: Math.max(state.buzzerPressedAt || 0, remote.buzzerPressedAt || 0, (window._localBuzzLock && Date.now() < window._localBuzzLock.until) ? window._localBuzzLock.pressTs : 0),
     responses: remote.responses,
     teams: (remote.teams || []).map(t => ({ id: t.id, name: t.name, score: t.score, connected: t.connected, lastFeedback: t.lastFeedback }))
   });
@@ -2931,15 +2940,32 @@ function mergeRemoteState(remote, forceSync = false) {
   const activeQBefore = state.activeQuestionId;
   const remoteActiveQ = Object.prototype.hasOwnProperty.call(remote, "activeQuestionId") ? remote.activeQuestionId : state.activeQuestionId;
   const remoteQOpen = Object.prototype.hasOwnProperty.call(remote, "questionOpen") ? Boolean(remote.questionOpen) : Boolean(state.questionOpen);
+  const mergedTeams = Array.isArray(remote.teams) ? remote.teams : state.teams;
+  const validTeamIds = new Set(mergedTeams.map(t => t.id));
+  const mergedResponses = (remote.responses && typeof remote.responses === "object") ? { ...remote.responses } : {};
+  Object.keys(mergedResponses).forEach(tid => {
+    if (!validTeamIds.has(tid)) delete mergedResponses[tid];
+  });
+  let mergedBuzzer = remote.buzzerLockedBy;
+  if (mergedBuzzer && !validTeamIds.has(mergedBuzzer)) {
+    mergedBuzzer = null;
+  }
+  if (window._localBuzzLock && Date.now() < window._localBuzzLock.until && validTeamIds.has(window._localBuzzLock.teamId)) {
+    if (!remote.buzzerPressedAt || remote.buzzerPressedAt <= window._localBuzzLock.pressTs) {
+      mergedBuzzer = window._localBuzzLock.teamId;
+    }
+  }
+
   state = {
     ...state,
     ...remote,
     activeQuestionId: remoteActiveQ,
     questionOpen: remoteQOpen,
-    teams: (Array.isArray(remote.teams) && remote.teams.length) ? remote.teams : state.teams,
+    buzzerLockedBy: mergedBuzzer,
+    teams: mergedTeams,
     questions: Array.isArray(remote.questions) ? remote.questions : state.questions,
     domains: Array.isArray(remote.domains) ? remote.domains : state.domains,
-    responses: (remote.responses && typeof remote.responses === "object") ? remote.responses : {}
+    responses: mergedResponses
   };
   if (state.responses && typeof state.responses === "object") {
     Object.keys(state.responses).forEach(tId => {
@@ -2989,6 +3015,7 @@ async function sendContestantAction(pin, actionPayload) {
         teams: state.teams,
         responses: state.responses,
         buzzerLockedBy: state.buzzerLockedBy,
+        buzzerPressedAt: state.buzzerPressedAt || Date.now(),
         updatedAt: state.updatedAt
       })
     });
@@ -3067,10 +3094,10 @@ async function applyIncomingActions(pin, actionsObj) {
           graded: false
         };
         let team = state.teams.find(t => t.id === act.teamId);
-        if (!team && act.teamName) {
+        if (!team && act.teamName && !isDuplicateTeamName(act.teamName, null)) {
           team = {
             id: act.teamId,
-            name: act.teamName,
+            name: act.teamName.trim(),
             score: 0,
             roundScores: [0, 0, 0],
             domainHits: {},
@@ -3080,13 +3107,15 @@ async function applyIncomingActions(pin, actionsObj) {
             lastFeedback: ""
           };
           state.teams.push(team);
-        } else if (team && act.teamName && !/^t_[a-zA-Z0-9_]+$/.test(String(act.teamName).trim())) {
+        } else if (team && act.teamName && !/^t_[a-zA-Z0-9_]+$/.test(String(act.teamName).trim()) && !isDuplicateTeamName(act.teamName, team.id)) {
           team.name = act.teamName.trim();
         }
-        if (team) {
-          team.connected = true;
-          team.lastFeedback = `⚡ الأسرع (${act.timeSec ?? 0}ث)`;
+        if (!team) {
+          // Team was deleted or not present; ignore stale buzz from removed team
+          continue;
         }
+        team.connected = true;
+        team.lastFeedback = `⚡ الأسرع (${act.timeSec ?? 0}ث)`;
         mutated = true;
         triggerSupervisorBuzzerAlert(act.teamId, act.timeSec ?? 0);
       }
@@ -3280,7 +3309,12 @@ function renderContestantView() {
 
   const myRegId = localStorage.getItem("oualidia_qr_registered_team_" + pin) || contestantTeamId;
   const team = myRegId ? state.teams.find(t => t.id === myRegId) : null;
-  if (team) contestantTeamId = team.id;
+  if (team) {
+    contestantTeamId = team.id;
+  } else if (myRegId && Array.isArray(state.teams) && state.teams.length > 0) {
+    // Only clear stale local id if remote teams list has loaded and doesn't contain this team
+    contestantTeamId = null;
+  }
 
   const teamBox = document.getElementById("cTeamSelectBox");
   if (team) {
@@ -3398,13 +3432,16 @@ function contestantAnswer(ans) {
 
 function contestantBuzz() {
   const teamId = getActiveContestantTeamId();
-  if (!teamId || state.buzzerLockedBy || state.timeExpired) return;
+  if (!teamId || state.timeExpired) return;
+  if (state.buzzerLockedBy && state.buzzerLockedBy !== teamId) return;
   const qId = state.activeQuestionId || ((state.questions.find(item => item.type === "buzzer") || state.questions[0] || {}).id) || "";
-  const elapsed = state.questionStartTime ? Math.max(0.01, parseFloat(((Date.now() - state.questionStartTime) / 1000).toFixed(2))) : 0.1;
   const pressTs = Date.now();
+  const elapsed = state.questionStartTime ? Math.max(0.01, parseFloat(((pressTs - state.questionStartTime) / 1000).toFixed(2))) : 0.1;
   state.activeQuestionId = qId;
   state.buzzerLockedBy = teamId;
   state.buzzerPressedAt = pressTs;
+  state.timeExpired = false;
+  window._localBuzzLock = { teamId, qId, pressTs, until: Date.now() + 8000 };
   if (!state.responses) state.responses = {};
   state.responses[teamId] = {
     questionId: qId,
@@ -3421,10 +3458,11 @@ function contestantBuzz() {
     team.lastFeedback = `⚡ الأسرع (${elapsed}ث)`;
   }
   renderContestantView();
+  const cleanTeamName = (team && team.name) ? team.name.trim() : "";
   sendContestantAction(getTargetRoomPin(), {
     type: "BUZZ",
     teamId,
-    teamName: team ? team.name : "",
+    teamName: cleanTeamName,
     questionId: qId,
     sessionId: state.stageSessionId || "",
     timeSec: elapsed,
